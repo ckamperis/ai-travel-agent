@@ -1,4 +1,4 @@
-import { researchDestination as claudeResearch } from "@/lib/claude";
+import { researchDestination as aiResearch } from "@/lib/ai";
 import { EmailAnalysis } from "./types";
 
 const MOCK_RESEARCH = `## 7-Day Athens & Greek Islands Itinerary
@@ -31,7 +31,7 @@ Morning visit to Syntagma Square for the changing of the guard. Last-minute shop
 
 export async function researchDestination(analysis: EmailAnalysis): Promise<string> {
   try {
-    const result = await claudeResearch(
+    const result = await aiResearch(
       analysis.destination,
       analysis.interests,
       analysis.dates.duration

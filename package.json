@@ -8,8 +8,9 @@
     "start": "next start"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
+    "lucide-react": "^0.577.0",
     "next": "16.1.6",
+    "openai": "^6.31.0",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },

@@ -21,8 +21,8 @@ An agentic AI travel assistant that demonstrates how multiple AI agents collabor
 │Flight│Hotel │Research│Places│  Composer      │
 │Agent │Agent │Agent  │Agent │  Agent         │
 │      │      │       │      │               │
-│Duffel│Mock  │Claude │Google│  Claude API   │
-│API   │Data  │WebSrch│Places│  (synthesis)  │
+│Duffel│Mock  │GPT-4o │Google│  GPT-4o       │
+│API   │Data  │       │Places│  (synthesis)  │
 │(test)│+AI   │       │API   │               │
 └──────┴──────┴──────┴──────┴────────────────┘
 ```
@@ -31,7 +31,7 @@ An agentic AI travel assistant that demonstrates how multiple AI agents collabor
 - **Framework:** Next.js 14+ (App Router)
 - **UI:** React + Tailwind CSS
 - **Streaming:** Server-Sent Events (SSE) for real-time agent updates
-- **AI:** Claude API (claude-sonnet-4-20250514 for speed)
+- **AI:** OpenAI API (gpt-4o)
 - **Flight Data:** Duffel API (test mode — no signup needed)
 - **Hotel Data:** Curated mock data + Claude enhancement (guaranteed reliability)
 - **Places/POI:** Google Places API (New, v1)
@@ -39,7 +39,7 @@ An agentic AI travel assistant that demonstrates how multiple AI agents collabor
 
 ## API Keys Required (in .env.local)
 ```
-ANTHROPIC_API_KEY=sk-ant-...          # Claude API — from console.anthropic.com
+OPENAI_API_KEY=sk-...                 # OpenAI API — from platform.openai.com
 GOOGLE_PLACES_API_KEY=AIza...         # Google Cloud Console → Places API (New)
 DUFFEL_API_KEY=duffel_test            # Test mode — works immediately, no signup
 ```
@@ -76,7 +76,7 @@ ai-travel-agent/
 │   ├── lib/
 │   │   ├── duffel.ts                 # Duffel API client
 │   │   ├── google-places.ts          # Google Places API client
-│   │   ├── claude.ts                 # Claude API helper
+│   │   ├── ai.ts                     # OpenAI API helper
 │   │   └── mock-hotels.ts            # Curated Athens hotel data
 │   └── components/
 │       ├── DemoPanel.tsx             # Main demo container
@@ -92,9 +92,9 @@ ai-travel-agent/
 
 ### 1. Email Analyzer Agent
 - **Input:** Raw email text
-- **Process:** Claude API call to extract structured data
+- **Process:** OpenAI API call to extract structured data
 - **Output:** `{ origin, destination, dates, travelers, budget, interests, language, requests[] }`
-- **API:** Claude (claude-sonnet-4-20250514)
+- **API:** OpenAI (gpt-4o)
 
 ### 2. Flight Agent
 - **Input:** Origin IATA, destination IATA, dates, passengers
@@ -109,17 +109,17 @@ ai-travel-agent/
 
 ### 3. Hotel Agent
 - **Input:** City, check-in/out dates, guests, budget range
-- **Process:** Return curated mock data for Athens hotels, enhanced with Claude
+- **Process:** Return curated mock data for Athens hotels
 - **Output:** Top 3-5 hotels with name, location, price, rating, metro proximity
-- **API:** None (mock data) + Claude for descriptions
+- **API:** None (mock data)
 - **Why mock:** Guaranteed to work in live demo. Hotel APIs require paid accounts.
   The data is realistic and based on real Athens hotels.
 
 ### 4. Research Agent
 - **Input:** Destination, interests, duration
-- **Process:** Claude API with system prompt for Greece travel expertise
+- **Process:** OpenAI API with system prompt for Greece travel expertise
 - **Output:** Day-by-day itinerary suggestions, local tips, island recommendations
-- **API:** Claude (claude-sonnet-4-20250514)
+- **API:** OpenAI (gpt-4o)
 
 ### 5. Places Agent
 - **Input:** City, categories (restaurants, sights, neighborhoods)
@@ -130,9 +130,9 @@ ai-travel-agent/
 
 ### 6. Composer Agent
 - **Input:** All agent results + original email
-- **Process:** Claude API call to synthesize everything into response email
+- **Process:** OpenAI API call to synthesize everything into response email
 - **Output:** Professional, warm response email — streamed token by token
-- **API:** Claude (claude-sonnet-4-20250514, streaming)
+- **API:** OpenAI (gpt-4o, streaming)
 
 ## SSE Event Format
 Each agent sends events through the SSE stream:

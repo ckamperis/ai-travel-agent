@@ -1,4 +1,4 @@
-import { composeEmail } from "@/lib/claude";
+import { composeEmail } from "@/lib/ai";
 import { AllAgentResults } from "./types";
 
 export async function* composeResponse(
