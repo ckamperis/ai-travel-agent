@@ -1,12 +1,13 @@
 import { composeEmail } from "@/lib/ai";
-import { AllAgentResults } from "./types";
+import { AllAgentResults, FlightResult, HotelResult } from "./types";
 
 export async function* composeResponse(
   results: AllAgentResults,
-  originalEmail: string
+  originalEmail: string,
+  selectedFlight?: FlightResult,
+  selectedHotel?: HotelResult,
 ): AsyncGenerator<string> {
   try {
-    // Map agent-level EmailAnalysis to lib-level format
     const libAnalysis = {
       ...results.emailAnalysis,
       requests: results.emailAnalysis.specialRequests,
@@ -15,6 +16,8 @@ export async function* composeResponse(
     const stream = composeEmail(
       {
         emailAnalysis: libAnalysis,
+        selectedFlight,
+        selectedHotel,
         flights: results.flights,
         hotels: results.hotels,
         research: results.research,

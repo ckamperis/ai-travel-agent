@@ -1,263 +1,418 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
-  Play,
-  Mail,
   Plane,
   Building2,
   Search,
   MapPin,
-  PenTool,
-  RefreshCw,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  Copy,
+  Check,
   Clock,
   Zap,
+  ArrowRight,
+  RotateCcw,
+  Radio,
+  Star,
+  TrainFront,
+  Send,
+  PenTool,
+  Mail,
 } from 'lucide-react';
-import AgentStatusBar, { type AgentStatus } from '@/components/AgentStatusBar';
-import EmailInbox from '@/components/EmailInbox';
-import AgentCard from '@/components/AgentCard';
-import ResultsPanel from '@/components/ResultsPanel';
-import EmailComposer from '@/components/EmailComposer';
-import ActionButton from '@/components/ActionButton';
+import type {
+  EmailAnalysis,
+  FlightResult,
+  HotelResult,
+  PlaceResult,
+} from '@/agents/types';
 
-/* ---------- Types ---------- */
+/* ================================================================
+   Constants
+   ================================================================ */
 
-type Phase =
-  | 'landing'
-  | 'email-arrived'
-  | 'analyzing'
-  | 'processing'
-  | 'review'
-  | 'composing'
-  | 'done';
+const DEMO_EMAIL = `Guten Tag,
 
-interface FlightResult {
-  airline: string;
-  departure: string;
-  arrival: string;
-  stops: number;
-  price: string;
-  isBest?: boolean;
-  source?: 'live' | 'mock';
-  duration?: string;
+We are Klaus and Anna Mueller from Hamburg, Germany. We are planning a trip to Greece for next week (7 days) and we are looking for:
+
+- Flights from Hamburg to Athens (arriving Monday morning if possible)
+- A nice hotel in central Athens, close to metro, mid-range budget (~120-150\u20AC/night)
+- A complete travel plan: what to see, where to eat, day trips from Athens
+- We love history, local food, and walking around neighborhoods
+- We would also like to visit one island for 2 days if possible
+
+Could you please help us organize everything?
+
+Best regards,
+Klaus & Anna Mueller`;
+
+type Phase = 'input' | 'processing' | 'review' | 'composing' | 'done';
+type Status = 'idle' | 'active' | 'done' | 'error';
+
+/* ================================================================
+   Helpers
+   ================================================================ */
+
+function fmtTime(ms: number): string {
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
-interface HotelResult {
-  name: string;
-  area: string;
-  pricePerNight: number;
-  rating: number;
-  stars: number;
-  metroStation: string;
-  metroDistance: string;
-  source?: 'live' | 'mock';
+function fmtDate(d: string): string {
+  try {
+    return new Date(d).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return d;
+  }
 }
 
-interface PlaceResult {
-  name: string;
-  rating: number;
-  category: string;
-  address: string;
-  source?: 'live' | 'mock';
+function fmtClock(iso: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  } catch {
+    return iso;
+  }
 }
 
-interface ResearchDay {
-  day: string;
-  description: string;
-}
-
-/* ---------- Fallback mock data ---------- */
-
-const MOCK_FLIGHTS: FlightResult[] = [
-  { airline: 'Aegean Airlines', departure: '06:45', arrival: '10:30', stops: 0, price: '289€', isBest: true, source: 'mock' },
-  { airline: 'Lufthansa', departure: '08:15', arrival: '13:50', stops: 1, price: '312€', source: 'mock' },
-  { airline: 'Ryanair', departure: '11:30', arrival: '15:20', stops: 0, price: '198€', source: 'mock' },
-  { airline: 'Austrian Airlines', departure: '07:00', arrival: '12:45', stops: 1, price: '275€', source: 'mock' },
-];
-
-const MOCK_HOTELS: HotelResult[] = [
-  { name: 'Hermes Hotel', area: 'Syntagma', pricePerNight: 142, rating: 8.9, stars: 3, metroStation: 'Syntagma', metroDistance: '3 min', source: 'mock' },
-  { name: 'Hotel Plaka', area: 'Plaka', pricePerNight: 135, rating: 8.7, stars: 3, metroStation: 'Monastiraki', metroDistance: '2 min', source: 'mock' },
-  { name: 'Electra Palace Athens', area: 'Plaka', pricePerNight: 195, rating: 9.1, stars: 5, metroStation: 'Syntagma', metroDistance: '4 min', source: 'mock' },
-];
-
-const MOCK_PLACES: PlaceResult[] = [
-  { name: 'Acropolis', rating: 4.8, category: 'Landmark', address: 'Athens 105 58', source: 'mock' },
-  { name: 'Ta Karamanlidika tou Fani', rating: 4.6, category: 'Restaurant', address: 'Sokratous 1, Athens', source: 'mock' },
-  { name: 'Acropolis Museum', rating: 4.7, category: 'Museum', address: 'Dionysiou Areopagitou 15', source: 'mock' },
-  { name: 'To Kafeneio', rating: 4.5, category: 'Restaurant', address: 'Loukianou 26, Kolonaki', source: 'mock' },
-  { name: 'Ancient Agora', rating: 4.6, category: 'Landmark', address: 'Adrianou 24, Athens', source: 'mock' },
-];
-
-const MOCK_RESEARCH: ResearchDay[] = [
-  { day: 'Day 1', description: 'Arrive in Athens, check-in, walk through Plaka, dinner at taverna' },
-  { day: 'Day 2', description: 'Acropolis & Museum, lunch at Monastiraki, sunset' },
-  { day: 'Day 3', description: 'Ancient Agora, Kerameikos, street food tour in Psyrri' },
-  { day: 'Day 4', description: 'Day trip to Aegina or Hydra island' },
-  { day: 'Day 5', description: 'Second island day — beaches, local cuisine' },
-  { day: 'Day 6', description: 'National Archaeological Museum, Exarchia, Kolonaki' },
-  { day: 'Day 7', description: 'Last shopping, Lycabettus Hill, departure' },
-];
-
-const MOCK_COMPOSED_EMAIL = `Liebe Frau und Herr Mueller,
-
-vielen Dank für Ihre Anfrage! Wir freuen uns, Ihnen bei der Planung Ihrer Griechenlandreise helfen zu können. Hier ist unser Vorschlag:
-
-FLÜGE
-Wir empfehlen den Direktflug mit Aegean Airlines:
-- Hamburg → Athen: Montag, 06:45 - 10:30 (Direktflug)
-- Preis: 289€ pro Person
-
-HOTEL
-Das Hermes Hotel im Stadtzentrum (Syntagma):
-- 142€ pro Nacht, Bewertung 8.9/10
-- 3 Minuten zur Metro, ideal für Erkundungen
-- Frühstück, WiFi, Rooftop-Bar mit Akropolis-Blick
-
-REISEPLAN
-Tag 1: Ankunft, Check-in, Spaziergang durch Plaka
-Tag 2: Akropolis & Museum, Abendessen in Monastiraki
-Tag 3: Antike Agora, Street Food Tour in Psyrri
-Tag 4-5: Ausflug nach Hydra (Insel) — Geschichte & Strände
-Tag 6: Nationalmuseum, Exarchia & Kolonaki Viertel
-Tag 7: Letzte Einkäufe, Lykavittos-Hügel, Abreise
-
-RESTAURANT-TIPPS
-- Ta Karamanlidika tou Fani — authentische griechische Küche
-- To Kafeneio — traditionelles Café in Kolonaki
-
-Sollen wir die Flüge und das Hotel für Sie buchen?
-
-Mit freundlichen Grüßen,
-Ihr Afea Travel Team`;
-
-/* ---------- Agent icon map ---------- */
-
-const AGENT_ICONS: Record<string, React.ReactNode> = {
-  email: <Mail size={18} />,
-  flight: <Plane size={18} />,
-  hotel: <Building2 size={18} />,
-  research: <Search size={18} />,
-  places: <MapPin size={18} />,
-  composer: <PenTool size={18} />,
-};
-
-const AGENT_COLORS: Record<string, string> = {
-  email: '#0891B2',
-  flight: '#22D3EE',
-  hotel: '#F59E0B',
-  research: '#10B981',
-  places: '#A78BFA',
-  composer: '#EC4899',
-};
-
-const AGENT_NAMES: Record<string, string> = {
-  email: 'Ανάλυση Email',
-  flight: 'Πτήσεις',
-  hotel: 'Ξενοδοχεία',
-  research: 'Έρευνα',
-  places: 'Τοποθεσίες',
-  composer: 'Σύνθεση',
-};
-
-const AGENTS_PREVIEW = [
-  { id: 'email', name: 'Ανάλυση Email', icon: <Mail size={13} />, color: '#0891B2' },
-  { id: 'flight', name: 'Αναζήτηση Πτήσεων', icon: <Plane size={13} />, color: '#22D3EE' },
-  { id: 'hotel', name: 'Αναζήτηση Ξενοδοχείων', icon: <Building2 size={13} />, color: '#F59E0B' },
-  { id: 'research', name: 'Έρευνα Προορισμού', icon: <Search size={13} />, color: '#10B981' },
-  { id: 'places', name: 'Τοποθεσίες & Εστιατόρια', icon: <MapPin size={13} />, color: '#A78BFA' },
-  { id: 'composer', name: 'Σύνθεση Απάντησης', icon: <PenTool size={13} />, color: '#EC4899' },
-];
-
-/* ---------- Helpers ---------- */
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function parseResearchTodays(text: string): ResearchDay[] {
+function parseResearchDays(text: string): { day: string; desc: string }[] {
   const lines = text.split('\n').filter((l) => l.trim());
-  const days: ResearchDay[] = [];
-  let currentDay = '';
-  let currentDesc = '';
-
+  const days: { day: string; desc: string }[] = [];
+  let cur = '';
+  let desc = '';
   for (const line of lines) {
-    const dayMatch = line.match(/^(?:Day|Ημέρα|Tag)\s*(\d+)/i);
-    if (dayMatch) {
-      if (currentDay) days.push({ day: currentDay, description: currentDesc.trim() });
-      currentDay = `Day ${dayMatch[1]}`;
-      currentDesc = line.replace(/^(?:Day|Ημέρα|Tag)\s*\d+[:\-–—.\s]*/i, '');
-    } else if (currentDay) {
-      currentDesc += ' ' + line;
+    const m = line.match(/\*?\*?(?:Day|Ημέρα|Tag)\s*(\d+)/i);
+    if (m) {
+      if (cur) days.push({ day: cur, desc: desc.trim() });
+      cur = `Day ${m[1]}`;
+      desc = line.replace(/^[\s*]*(?:Day|Ημέρα|Tag)\s*\d+[^a-zA-Z]*/i, '');
+    } else if (cur) {
+      desc += ' ' + line;
     }
   }
-  if (currentDay) days.push({ day: currentDay, description: currentDesc.trim() });
-  return days.length > 0 ? days : MOCK_RESEARCH;
+  if (cur) days.push({ day: cur, desc: desc.trim() });
+  return days;
 }
 
-/* ---------- Component ---------- */
+/* ================================================================
+   LiveBadge
+   ================================================================ */
+
+function LiveBadge({ source }: { source?: 'live' | 'mock' }) {
+  if (source !== 'live') return null;
+  return (
+    <span className="inline-flex items-center gap-1 rounded bg-green/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-green">
+      <Radio size={8} className="animate-pulse" />
+      Live
+    </span>
+  );
+}
+
+/* ================================================================
+   AgentColumn — one of the 4 parallel-agent columns
+   ================================================================ */
+
+function AgentColumn({
+  name,
+  icon,
+  color,
+  status,
+  message,
+  time,
+  source,
+  children,
+}: {
+  name: string;
+  icon: React.ReactNode;
+  color: string;
+  status: Status;
+  message?: string;
+  time?: number;
+  source?: 'live' | 'mock';
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      className="glass-card flex flex-col p-4 transition-all duration-500"
+      style={{
+        borderColor:
+          status === 'active'
+            ? `${color}40`
+            : status === 'done'
+              ? `${color}20`
+              : undefined,
+      }}
+    >
+      {/* Header */}
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span
+            style={{
+              color: status === 'idle' ? `${color}60` : color,
+            }}
+          >
+            {icon}
+          </span>
+          <span
+            className="text-xs font-semibold uppercase tracking-wider"
+            style={{
+              color: status === 'idle' ? `${color}80` : color,
+            }}
+          >
+            {name}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {status === 'done' && <LiveBadge source={source} />}
+          {status === 'active' && (
+            <Loader2 size={14} className="animate-spin" style={{ color }} />
+          )}
+          {status === 'done' && (
+            <CheckCircle
+              size={14}
+              className="animate-scale-in"
+              style={{ color }}
+            />
+          )}
+          {status === 'error' && <AlertCircle size={14} className="text-red-400" />}
+        </div>
+      </div>
+
+      {/* API info */}
+      {message && status !== 'idle' && (
+        <p className="mb-2 truncate text-[11px] text-foreground/30">{message}</p>
+      )}
+
+      {/* Time */}
+      {time != null && status === 'done' && (
+        <div className="mb-3 flex items-center gap-1 text-[10px] text-foreground/25">
+          <Clock size={10} />
+          {fmtTime(time)}
+        </div>
+      )}
+
+      {/* Results or skeleton */}
+      <div className="mt-auto">
+        {status === 'done' && children}
+        {status === 'active' && (
+          <div className="space-y-2">
+            <div className="h-3 w-3/4 rounded bg-foreground/[0.04] animate-pulse" />
+            <div className="h-3 w-1/2 rounded bg-foreground/[0.04] animate-pulse" />
+            <div className="h-3 w-2/3 rounded bg-foreground/[0.04] animate-pulse" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   Main Component
+   ================================================================ */
 
 export default function Home() {
-  const [phase, setPhase] = useState<Phase>('landing');
-  const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentStatus>>({});
+  /* ---- State ---- */
+  const [phase, setPhase] = useState<Phase>('input');
+  const [emailText, setEmailText] = useState(DEMO_EMAIL);
+
+  // Analysis
+  const [analysis, setAnalysis] = useState<EmailAnalysis | null>(null);
+  const [analysisStatus, setAnalysisStatus] = useState<Status>('idle');
+  const [analysisTime, setAnalysisTime] = useState(0);
+  const [analysisSource, setAnalysisSource] = useState<'live' | 'mock'>('mock');
+
+  // Parallel agents
+  const [agentStatuses, setAgentStatuses] = useState<Record<string, Status>>({
+    flight: 'idle',
+    hotel: 'idle',
+    research: 'idle',
+    places: 'idle',
+  });
   const [agentMessages, setAgentMessages] = useState<Record<string, string>>({});
   const [agentTimes, setAgentTimes] = useState<Record<string, number>>({});
-  const [flights, setFlights] = useState<FlightResult[] | null>(null);
-  const [hotels, setHotels] = useState<HotelResult[] | null>(null);
-  const [places, setPlaces] = useState<PlaceResult[] | null>(null);
-  const [research, setResearch] = useState<ResearchDay[] | null>(null);
+  const [agentSources, setAgentSources] = useState<Record<string, 'live' | 'mock'>>({});
+
+  // Results
+  const [flights, setFlights] = useState<FlightResult[]>([]);
+  const [hotels, setHotels] = useState<HotelResult[]>([]);
+  const [research, setResearch] = useState('');
+  const [places, setPlaces] = useState<PlaceResult[]>([]);
+
+  // Selection
+  const [selectedFlightIdx, setSelectedFlightIdx] = useState(0);
+  const [selectedHotelIdx, setSelectedHotelIdx] = useState(0);
+
+  // Compose
   const [composedEmail, setComposedEmail] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [startTime, setStartTime] = useState(0);
+
+  // Meta
   const [totalTime, setTotalTime] = useState(0);
-  const [usedLiveApi, setUsedLiveApi] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const agentStartTimes = useRef<Record<string, number>>({});
+  // Refs
+  const startTimeRef = useRef(0);
+  const agentStartRef = useRef<Record<string, number>>({});
+  const pipelineRef = useRef<HTMLDivElement>(null);
+  const reviewRef = useRef<HTMLDivElement>(null);
+  const composeRef = useRef<HTMLDivElement>(null);
+  const completedRef = useRef(0);
 
-  const setAgent = useCallback(
-    (id: string, status: AgentStatus, message: string) => {
-      setAgentStatuses((prev) => ({ ...prev, [id]: status }));
-      setAgentMessages((prev) => ({ ...prev, [id]: message }));
-    },
-    []
-  );
+  /* ---- Auto-scroll on phase change ---- */
+  useEffect(() => {
+    const scroll = (ref: React.RefObject<HTMLDivElement | null>) =>
+      setTimeout(
+        () => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+        120
+      );
+    if (phase === 'review') scroll(reviewRef);
+    if (phase === 'composing' || phase === 'done') scroll(composeRef);
+  }, [phase]);
 
-  const resetAll = useCallback(() => {
-    setPhase('landing');
-    setAgentStatuses({});
+  /* ---- Process email (orchestrate SSE) ---- */
+  const processEmail = useCallback(async () => {
+    setPhase('processing');
+    startTimeRef.current = Date.now();
+    completedRef.current = 0;
+    setAnalysis(null);
+    setAnalysisStatus('active');
+    setAnalysisTime(0);
+    setAnalysisSource('mock');
+    setAgentStatuses({ flight: 'idle', hotel: 'idle', research: 'idle', places: 'idle' });
     setAgentMessages({});
     setAgentTimes({});
-    setFlights(null);
-    setHotels(null);
-    setPlaces(null);
-    setResearch(null);
+    setAgentSources({});
+    setFlights([]);
+    setHotels([]);
+    setResearch('');
+    setPlaces([]);
+    setSelectedFlightIdx(0);
+    setSelectedHotelIdx(0);
     setComposedEmail('');
-    setIsStreaming(false);
-    setTotalTime(0);
-    setUsedLiveApi(false);
-    agentStartTimes.current = {};
-  }, []);
-
-  /* ---------- Live SSE streaming ---------- */
-  const runLiveDemo = useCallback(async () => {
-    const t0 = Date.now();
-    setStartTime(t0);
-
-    // Phase 1: Email arrives
-    setPhase('email-arrived');
-    await sleep(1800);
-
-    // Phase 2: Start SSE
-    setPhase('analyzing');
-    setUsedLiveApi(true);
-
-    let composerText = '';
+    setCopied(false);
 
     try {
-      const response = await fetch('/api/orchestrate', { method: 'POST' });
-      if (!response.ok || !response.body) throw new Error('SSE failed');
+      const res = await fetch('/api/orchestrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailText }),
+      });
+      if (!res.ok || !res.body) throw new Error('SSE connection failed');
 
-      const reader = response.body.getReader();
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let done = false;
+
+      while (!done) {
+        const { done: streamDone, value } = await reader.read();
+        if (streamDone) { done = true; break; }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6).trim();
+          if (payload === '[DONE]') { done = true; break; }
+
+          try {
+            const ev = JSON.parse(payload);
+            const { agent, status, message, data, source } = ev;
+
+            if (agent === 'email') {
+              if (status === 'started') {
+                agentStartRef.current.email = Date.now();
+                setAnalysisStatus('active');
+              } else if (status === 'done') {
+                setAnalysisStatus('done');
+                setAnalysis(data as EmailAnalysis);
+                setAnalysisTime(Date.now() - (agentStartRef.current.email || Date.now()));
+                if (source) setAnalysisSource(source);
+              } else if (status === 'error') {
+                setAnalysisStatus('error');
+              }
+            } else if (['flight', 'hotel', 'research', 'places'].includes(agent)) {
+              if (status === 'started') {
+                agentStartRef.current[agent] = Date.now();
+                setAgentStatuses((p) => ({ ...p, [agent]: 'active' }));
+                setAgentMessages((p) => ({ ...p, [agent]: message }));
+              } else if (status === 'done') {
+                const elapsed = Date.now() - (agentStartRef.current[agent] || Date.now());
+                setAgentStatuses((p) => ({ ...p, [agent]: 'done' }));
+                setAgentMessages((p) => ({ ...p, [agent]: message }));
+                setAgentTimes((p) => ({ ...p, [agent]: elapsed }));
+                if (source) setAgentSources((p) => ({ ...p, [agent]: source }));
+
+                if (agent === 'flight') setFlights((data as FlightResult[]) || []);
+                if (agent === 'hotel') setHotels((data as HotelResult[]) || []);
+                if (agent === 'research') setResearch((data as string) || '');
+                if (agent === 'places') setPlaces((data as PlaceResult[]) || []);
+
+                completedRef.current++;
+                if (completedRef.current === 4) {
+                  setTimeout(() => setPhase('review'), 400);
+                }
+              } else if (status === 'error') {
+                setAgentStatuses((p) => ({ ...p, [agent]: 'error' }));
+                setAgentMessages((p) => ({ ...p, [agent]: message }));
+                completedRef.current++;
+                if (completedRef.current === 4) {
+                  setTimeout(() => setPhase('review'), 400);
+                }
+              }
+            }
+          } catch {
+            /* skip unparseable */
+          }
+        }
+      }
+
+      // Safety: transition to review if stream ended early
+      if (completedRef.current > 0 && completedRef.current < 4) {
+        setPhase('review');
+      }
+    } catch (err) {
+      console.error('Orchestrate failed:', err);
+      setAnalysisStatus('error');
+    }
+  }, [emailText]);
+
+  /* ---- Compose response (separate SSE) ---- */
+  const startCompose = useCallback(async () => {
+    setPhase('composing');
+    setIsStreaming(true);
+    setComposedEmail('');
+    setCopied(false);
+
+    let text = '';
+
+    try {
+      const res = await fetch('/api/compose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailText,
+          emailAnalysis: analysis,
+          selectedFlight: flights[selectedFlightIdx] || null,
+          selectedHotel: hotels[selectedHotelIdx] || null,
+          flights,
+          hotels,
+          research,
+          places,
+        }),
+      });
+      if (!res.ok || !res.body) throw new Error('Compose failed');
+
+      const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
 
@@ -275,192 +430,73 @@ export default function Home() {
           if (payload === '[DONE]') continue;
 
           try {
-            const event = JSON.parse(payload);
-            const { agent, status, message, data } = event;
-
-            // Map backend statuses to frontend
-            if (status === 'started') {
-              agentStartTimes.current[agent] = Date.now();
-              setAgent(agent, 'active', message);
-
-              // Transition to processing phase when parallel agents start
-              if (agent === 'flight') {
-                setPhase('processing');
-              }
-            } else if (status === 'working') {
-              if (agent === 'composer') {
-                if (!isStreaming) {
-                  setPhase('composing');
-                  setIsStreaming(true);
-                }
-                composerText += message;
-                setComposedEmail(composerText);
-              } else {
-                setAgent(agent, 'active', message);
-              }
-            } else if (status === 'done') {
-              const elapsed = agentStartTimes.current[agent]
-                ? Date.now() - agentStartTimes.current[agent]
-                : null;
-              if (elapsed != null) {
-                setAgentTimes((prev) => ({ ...prev, [agent]: elapsed }));
-              }
-              setAgent(agent, 'done', message);
-
-              // Store results
-              if (agent === 'flight' && data) {
-                const flightData = (Array.isArray(data) ? data : []).map(
-                  (f: { owner?: { name?: string }; total_amount?: string; total_currency?: string; departureTime?: string; arrivalTime?: string; airline?: string; price?: number; currency?: string; stops?: number; duration?: string; slices?: Array<{ segments?: Array<{ departing_at?: string; arriving_at?: string; marketing_carrier?: { name?: string } }> }> }, i: number) => ({
-                    airline: f.airline || f.owner?.name || `Flight ${i + 1}`,
-                    departure: f.departureTime || (f.slices?.[0]?.segments?.[0]?.departing_at ? new Date(f.slices[0].segments[0].departing_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--'),
-                    arrival: f.arrivalTime || (f.slices?.[0]?.segments?.[(f.slices[0].segments?.length || 1) - 1]?.arriving_at ? new Date(f.slices[0].segments![(f.slices[0].segments?.length || 1) - 1].arriving_at!).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--'),
-                    stops: f.stops ?? 0,
-                    price: f.price != null ? `${f.price}${f.currency || '€'}` : f.total_amount ? `${f.total_amount}${f.total_currency || '€'}` : 'N/A',
-                    isBest: i === 0,
-                    source: 'live' as const,
-                    duration: f.duration,
-                  })
-                );
-                setFlights(flightData.length > 0 ? flightData : MOCK_FLIGHTS);
-              }
-              if (agent === 'hotel' && data) {
-                const hotelData = (Array.isArray(data) ? data : []).map(
-                  (h: { name?: string; area?: string; pricePerNight?: number; rating?: number; stars?: number; metroStation?: string; metroDistance?: string }) => ({
-                    name: h.name || 'Hotel',
-                    area: h.area || '',
-                    pricePerNight: h.pricePerNight || 0,
-                    rating: h.rating || 0,
-                    stars: h.stars || 3,
-                    metroStation: h.metroStation || '',
-                    metroDistance: h.metroDistance || '',
-                    source: 'live' as const,
-                  })
-                );
-                setHotels(hotelData.length > 0 ? hotelData : MOCK_HOTELS);
-              }
-              if (agent === 'places' && data) {
-                const placeData = (Array.isArray(data) ? data : []).map(
-                  (p: { name?: string; displayName?: { text?: string }; rating?: number; address?: string; formattedAddress?: string; summary?: string; editorialSummary?: { text?: string }; category?: string; types?: string[] }) => ({
-                    name: p.name || p.displayName?.text || 'Place',
-                    rating: p.rating || 0,
-                    category: p.category || (p.types?.[0] || 'Place'),
-                    address: p.address || p.formattedAddress || '',
-                    source: 'live' as const,
-                  })
-                );
-                setPlaces(placeData.length > 0 ? placeData : MOCK_PLACES);
-              }
-              if (agent === 'research' && data) {
-                const researchText = typeof data === 'string' ? data : JSON.stringify(data);
-                setResearch(parseResearchTodays(researchText));
-              }
-              if (agent === 'composer') {
-                setIsStreaming(false);
-                setTotalTime(Math.round((Date.now() - t0) / 1000));
-                setPhase('done');
-              }
-            } else if (status === 'error') {
-              setAgent(agent, 'error', message);
+            const { chunk } = JSON.parse(payload);
+            if (chunk) {
+              text += chunk;
+              setComposedEmail(text);
             }
           } catch {
-            // skip unparseable lines
+            /* skip */
           }
         }
       }
-    } catch {
-      // Fallback to mock if SSE fails
-      runMockDemo();
+    } catch (err) {
+      console.error('Compose failed:', err);
+      if (!text) {
+        text =
+          'We apologize, but we encountered an issue composing your travel plan. Our team will follow up shortly.\n\nBest regards,\nAfea Travel';
+        setComposedEmail(text);
+      }
+    } finally {
+      setIsStreaming(false);
+      setTotalTime(Math.round((Date.now() - startTimeRef.current) / 1000));
+      setPhase('done');
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setAgent]);
+  }, [emailText, analysis, flights, hotels, research, places, selectedFlightIdx, selectedHotelIdx]);
 
-  /* ---------- Mock fallback ---------- */
-  const runMockDemo = useCallback(async () => {
-    const t0 = Date.now();
-    setStartTime(t0);
-
-    setPhase('email-arrived');
-    await sleep(1800);
-
-    setPhase('analyzing');
-    setAgent('email', 'active', 'Ανάλυση περιεχομένου email...');
-    await sleep(1800 + Math.random() * 800);
-    setAgent('email', 'done', 'Εξήχθησαν: προορισμός, ημερομηνίες, προτιμήσεις');
-    setAgentTimes((prev) => ({ ...prev, email: 1800 + Math.round(Math.random() * 800) }));
-    await sleep(600);
-
-    setPhase('processing');
-
-    setAgent('flight', 'active', 'Αναζήτηση πτήσεων HAM → ATH...');
-    setAgent('hotel', 'active', 'Αναζήτηση ξενοδοχείων στην Αθήνα...');
-    setAgent('research', 'active', 'Δημιουργία προγράμματος ταξιδιού...');
-    setAgent('places', 'active', 'Αναζήτηση εστιατορίων & αξιοθέατων...');
-
-    agentStartTimes.current = {
-      flight: Date.now(),
-      hotel: Date.now(),
-      research: Date.now(),
-      places: Date.now(),
-    };
-
-    await sleep(2200 + Math.random() * 600);
-    setAgent('flight', 'done', '4 πτήσεις βρέθηκαν');
-    setFlights(MOCK_FLIGHTS);
-    setAgentTimes((prev) => ({ ...prev, flight: Date.now() - agentStartTimes.current.flight }));
-
-    await sleep(1000 + Math.random() * 500);
-    setAgent('hotel', 'done', '3 ξενοδοχεία βρέθηκαν');
-    setHotels(MOCK_HOTELS);
-    setAgentTimes((prev) => ({ ...prev, hotel: Date.now() - agentStartTimes.current.hotel }));
-
-    await sleep(800 + Math.random() * 700);
-    setAgent('places', 'done', '5 τοποθεσίες βρέθηκαν');
-    setPlaces(MOCK_PLACES);
-    setAgentTimes((prev) => ({ ...prev, places: Date.now() - agentStartTimes.current.places }));
-
-    await sleep(1200 + Math.random() * 400);
-    setAgent('research', 'done', 'Πρόγραμμα 7 ημερών');
-    setResearch(MOCK_RESEARCH);
-    setAgentTimes((prev) => ({ ...prev, research: Date.now() - agentStartTimes.current.research }));
-
-    await sleep(1200);
-    setPhase('review');
-  }, [setAgent]);
-
-  const runComposer = useCallback(async () => {
-    setPhase('composing');
-    setAgent('composer', 'active', 'Σύνθεση email απάντησης...');
-    setIsStreaming(true);
-    agentStartTimes.current.composer = Date.now();
-
-    for (let i = 0; i <= MOCK_COMPOSED_EMAIL.length; i++) {
-      setComposedEmail(MOCK_COMPOSED_EMAIL.slice(0, i));
-      const char = MOCK_COMPOSED_EMAIL[i];
-      const delay = char === '\n' ? 35 + Math.random() * 20 : char === ' ' ? 12 + Math.random() * 8 : 8 + Math.random() * 10;
-      await sleep(delay);
-    }
-
+  /* ---- Reset ---- */
+  const reset = useCallback(() => {
+    setPhase('input');
+    setEmailText(DEMO_EMAIL);
+    setAnalysis(null);
+    setAnalysisStatus('idle');
+    setAnalysisTime(0);
+    setAnalysisSource('mock');
+    setAgentStatuses({ flight: 'idle', hotel: 'idle', research: 'idle', places: 'idle' });
+    setAgentMessages({});
+    setAgentTimes({});
+    setAgentSources({});
+    setFlights([]);
+    setHotels([]);
+    setResearch('');
+    setPlaces([]);
+    setSelectedFlightIdx(0);
+    setSelectedHotelIdx(0);
+    setComposedEmail('');
     setIsStreaming(false);
-    setAgent('composer', 'done', 'Email απάντησης έτοιμο');
-    setAgentTimes((prev) => ({ ...prev, composer: Date.now() - agentStartTimes.current.composer }));
-    setTotalTime(Math.round((Date.now() - startTime) / 1000));
-    setPhase('done');
-  }, [setAgent, startTime]);
+    setTotalTime(0);
+    setCopied(false);
+    completedRef.current = 0;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
-  const runDemo = useCallback(async () => {
-    try {
-      await runLiveDemo();
-    } catch {
-      await runMockDemo();
-    }
-  }, [runLiveDemo, runMockDemo]);
+  /* ---- Copy ---- */
+  const copyEmail = useCallback(async () => {
+    await navigator.clipboard.writeText(composedEmail);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [composedEmail]);
 
-  /* ---------- Render ---------- */
+  /* ---- Derived ---- */
+  const showAgentGrid = analysisStatus === 'done';
+  const agentsDone = phase === 'review' || phase === 'composing' || phase === 'done';
 
-  const showStatusBar = phase !== 'landing';
+  /* ================================================================
+     Render
+     ================================================================ */
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden">
+    <div className="min-h-screen">
       {/* Background grid */}
       <div
         className="pointer-events-none fixed inset-0 z-0 opacity-[0.02]"
@@ -471,218 +507,587 @@ export default function Home() {
         }}
       />
 
-      <AgentStatusBar statuses={agentStatuses} visible={showStatusBar} />
-
-      <main
-        className={`relative z-10 flex min-h-screen flex-col items-center px-6 ${
-          showStatusBar ? 'pt-24' : 'pt-0'
-        } pb-20`}
+      {/* ===== SECTION 1 — HEADER + INPUT ===== */}
+      <section
+        className={`relative z-10 mx-auto max-w-4xl px-6 transition-all duration-700 ${
+          phase === 'input'
+            ? 'flex min-h-screen flex-col items-center justify-center'
+            : 'pt-10 pb-6'
+        }`}
       >
-        {/* ===== LANDING ===== */}
-        {phase === 'landing' && (
-          <div className="flex min-h-screen flex-col items-center justify-center gap-8">
-            {/* Header */}
-            <div className="animate-fade-in-up text-center">
-              <div className="mb-4 flex items-center justify-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-teal/20 to-cyan/20 border border-teal/20">
-                  <Zap size={24} className="text-teal" />
-                </div>
-              </div>
-              <h1 className="text-5xl font-bold tracking-tight text-foreground">
-                AI Travel Assistant
-              </h1>
-              <p className="mt-2 text-sm font-medium uppercase tracking-widest text-foreground/30">
-                Agentic Workflow Demo
+        {/* Title */}
+        <div className={`text-center ${phase === 'input' ? 'mb-8' : 'mb-5'}`}>
+          <div className="mb-3 flex items-center justify-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-teal/20 to-cyan/20 border border-teal/20">
+              <Zap size={22} className="text-teal" />
+            </div>
+          </div>
+          <h1
+            className={`font-bold tracking-tight text-foreground transition-all duration-500 ${
+              phase === 'input' ? 'text-5xl' : 'text-2xl'
+            }`}
+          >
+            AI Travel Assistant
+          </h1>
+          {phase === 'input' && (
+            <p className="mt-2 text-lg text-foreground/40">
+              Paste any customer email. Watch AI handle it in seconds.
+            </p>
+          )}
+        </div>
+
+        {/* Textarea */}
+        <div className="w-full max-w-3xl mx-auto">
+          <textarea
+            value={emailText}
+            onChange={(e) => setEmailText(e.target.value)}
+            readOnly={phase !== 'input'}
+            className={`w-full rounded-xl border bg-navy-deep/50 px-6 py-5 text-base leading-relaxed text-foreground/80 outline-none transition-all duration-500 resize-none font-sans ${
+              phase !== 'input'
+                ? 'border-card-border/20 opacity-40 cursor-not-allowed max-h-28 overflow-hidden text-sm'
+                : 'border-card-border hover:border-teal/30 focus:border-teal/50 focus:ring-1 focus:ring-teal/20 min-h-[280px]'
+            }`}
+            placeholder="Paste a customer email here..."
+          />
+
+          {phase === 'input' && (
+            <div className="mt-6 flex flex-col items-center gap-4 animate-fade-in-up stagger-2">
+              <button
+                onClick={processEmail}
+                disabled={!emailText.trim()}
+                className="inline-flex items-center justify-center gap-2.5 rounded-lg bg-gradient-to-r from-teal to-cyan px-8 py-3.5 text-base font-semibold tracking-wide text-navy-deep transition-all duration-200 hover:brightness-110 active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+              >
+                <Send size={18} />
+                Process Email
+              </button>
+              <p className="text-sm text-foreground/25">
+                Try it with your own email — change the destination, dates, or
+                language
               </p>
             </div>
+          )}
+        </div>
+      </section>
 
-            <div className="animate-fade-in-up stagger-2 flex flex-col items-center gap-5">
-              {/* Scenario */}
-              <div className="glass-card max-w-lg px-5 py-3.5 text-center">
-                <p className="text-sm text-foreground/45 leading-relaxed">
-                  <span className="font-medium text-teal/80">Scenario:</span>{' '}
-                  A German couple sends an email requesting help planning a week-long trip to Greece.
-                  Multiple AI agents collaborate in real-time to compose a complete response.
-                </p>
+      {/* ===== SECTION 2 — AGENT PIPELINE ===== */}
+      {phase !== 'input' && (
+        <section
+          ref={pipelineRef}
+          className="relative z-10 mx-auto max-w-5xl px-6 pb-10 animate-fade-in-up"
+        >
+          <h2 className="mb-8 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground/20">
+            Agent Pipeline
+          </h2>
+
+          {/* -- Email Analysis -- */}
+          <div className="mx-auto mb-8 max-w-3xl">
+            <div className="glass-card p-5">
+              <div className="flex items-center gap-4">
+                <div
+                  className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-colors duration-300 ${
+                    analysisStatus === 'done'
+                      ? 'bg-teal/15'
+                      : analysisStatus === 'active'
+                        ? 'bg-teal/10'
+                        : 'bg-foreground/5'
+                  }`}
+                >
+                  {analysisStatus === 'active' && (
+                    <Loader2 size={20} className="animate-spin text-teal" />
+                  )}
+                  {analysisStatus === 'done' && (
+                    <CheckCircle size={20} className="text-teal" />
+                  )}
+                  {analysisStatus === 'error' && (
+                    <AlertCircle size={20} className="text-red-400" />
+                  )}
+                  {analysisStatus === 'idle' && (
+                    <Mail size={20} className="text-foreground/30" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-sm font-semibold text-foreground/80">
+                      Email Analysis
+                    </h3>
+                    {analysisStatus === 'active' && (
+                      <span className="text-xs text-foreground/35">
+                        Reading and understanding the request...
+                      </span>
+                    )}
+                    {analysisStatus === 'done' && (
+                      <>
+                        <LiveBadge source={analysisSource} />
+                        <span className="flex items-center gap-1 text-[11px] text-foreground/30">
+                          <Clock size={10} />
+                          {fmtTime(analysisTime)}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <ActionButton
-                label="Start Demo"
-                icon={<Play size={18} />}
-                onClick={runDemo}
-                size="large"
-              />
-            </div>
-
-            {/* Agent preview pills */}
-            <div className="animate-fade-in stagger-4 mt-2 flex flex-wrap justify-center gap-2">
-              {AGENTS_PREVIEW.map((a) => (
-                <div
-                  key={a.id}
-                  className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px]"
-                  style={{
-                    background: `${a.color}08`,
-                    border: `1px solid ${a.color}18`,
-                    color: `${a.color}cc`,
-                  }}
-                >
-                  {a.icon}
-                  <span className="font-medium">{a.name}</span>
+              {/* Extracted data */}
+              {analysis && (
+                <div className="mt-4 space-y-2.5 pl-14 text-sm animate-fade-in">
+                  <div className="flex items-center gap-2 text-foreground/60">
+                    <span className="text-foreground/30">Route:</span>
+                    <span className="font-medium text-foreground/80">
+                      {analysis.origin}
+                    </span>
+                    <span className="text-[11px] text-foreground/25">
+                      ({analysis.originIATA})
+                    </span>
+                    <ArrowRight size={14} className="text-teal/50" />
+                    <span className="font-medium text-foreground/80">
+                      {analysis.destination}
+                    </span>
+                    <span className="text-[11px] text-foreground/25">
+                      ({analysis.destinationIATA})
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-6 gap-y-1 text-foreground/50">
+                    <span>
+                      <span className="text-foreground/30">Dates:</span>{' '}
+                      {fmtDate(analysis.dates.start)} &ndash;{' '}
+                      {fmtDate(analysis.dates.end)}
+                      <span className="ml-1 text-foreground/25">
+                        ({analysis.dates.duration} days)
+                      </span>
+                    </span>
+                    <span>
+                      <span className="text-foreground/30">Travelers:</span>{' '}
+                      {analysis.travelers.adults} adult
+                      {analysis.travelers.adults !== 1 && 's'}
+                      {analysis.travelers.children > 0 &&
+                        `, ${analysis.travelers.children} child${analysis.travelers.children !== 1 ? 'ren' : ''}`}
+                    </span>
+                    <span>
+                      <span className="text-foreground/30">Budget:</span>{' '}
+                      {analysis.budget.min > 0
+                        ? `\u20AC${analysis.budget.min}\u2013${analysis.budget.max}/night`
+                        : 'Flexible'}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {analysis.interests.map((interest, i) => (
+                      <span
+                        key={i}
+                        className="rounded-full bg-teal/10 px-2.5 py-0.5 text-xs text-teal/80"
+                      >
+                        {interest}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
           </div>
-        )}
 
-        {/* ===== EMAIL ARRIVED ===== */}
-        {phase === 'email-arrived' && (
-          <div className="flex min-h-[80vh] flex-col items-center justify-center gap-6">
-            <div className="animate-fade-in flex items-center gap-2 text-sm text-teal/80">
-              <Mail size={16} />
-              <span className="font-medium">New email received</span>
+          {/* -- 4-Column Agent Grid -- */}
+          {showAgentGrid && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 animate-fade-in-up">
+              {/* Flight */}
+              <AgentColumn
+                name="Flights"
+                icon={<Plane size={18} />}
+                color="#22D3EE"
+                status={agentStatuses.flight as Status}
+                message={agentMessages.flight}
+                time={agentTimes.flight}
+                source={agentSources.flight}
+              >
+                {flights.length > 0 && (
+                  <div className="space-y-1.5 text-xs">
+                    {flights.slice(0, 4).map((f, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between text-foreground/50"
+                      >
+                        <span className="truncate max-w-[110px]">
+                          {f.airline}
+                        </span>
+                        <span className="font-medium tabular-nums text-foreground/70">
+                          {f.price}\u20AC
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </AgentColumn>
+
+              {/* Hotel */}
+              <AgentColumn
+                name="Hotels"
+                icon={<Building2 size={18} />}
+                color="#F59E0B"
+                status={agentStatuses.hotel as Status}
+                message={agentMessages.hotel}
+                time={agentTimes.hotel}
+                source={agentSources.hotel}
+              >
+                {hotels.length > 0 && (
+                  <div className="space-y-1.5 text-xs">
+                    {hotels.slice(0, 4).map((h, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between text-foreground/50"
+                      >
+                        <span className="truncate max-w-[110px]">{h.name}</span>
+                        <span className="font-medium tabular-nums text-foreground/70">
+                          {h.pricePerNight}\u20AC
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </AgentColumn>
+
+              {/* Research */}
+              <AgentColumn
+                name="Research"
+                icon={<Search size={18} />}
+                color="#10B981"
+                status={agentStatuses.research as Status}
+                message={agentMessages.research}
+                time={agentTimes.research}
+                source={agentSources.research}
+              >
+                {research && (
+                  <div className="space-y-1 text-[11px] text-foreground/45">
+                    {parseResearchDays(research)
+                      .slice(0, 4)
+                      .map((d, i) => (
+                        <div key={i} className="truncate">
+                          <span className="font-medium text-foreground/55">
+                            {d.day}:
+                          </span>{' '}
+                          {d.desc}
+                        </div>
+                      ))}
+                    {parseResearchDays(research).length > 4 && (
+                      <div className="text-foreground/25">
+                        +{parseResearchDays(research).length - 4} more days
+                      </div>
+                    )}
+                  </div>
+                )}
+              </AgentColumn>
+
+              {/* Places */}
+              <AgentColumn
+                name="Places"
+                icon={<MapPin size={18} />}
+                color="#A78BFA"
+                status={agentStatuses.places as Status}
+                message={agentMessages.places}
+                time={agentTimes.places}
+                source={agentSources.places}
+              >
+                {places.length > 0 && (
+                  <div className="space-y-1.5 text-xs">
+                    {places.slice(0, 5).map((p, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between text-foreground/50"
+                      >
+                        <span className="truncate max-w-[110px]">{p.name}</span>
+                        {p.rating != null && (
+                          <span className="flex items-center gap-0.5 text-foreground/35">
+                            <Star size={9} className="fill-current" />
+                            {p.rating}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </AgentColumn>
             </div>
-            <EmailInbox visible />
+          )}
+        </section>
+      )}
+
+      {/* ===== SECTION 3 — REVIEW & SELECT ===== */}
+      {agentsDone && (
+        <section
+          ref={reviewRef}
+          className="relative z-10 mx-auto max-w-5xl px-6 pb-10 animate-fade-in-up"
+        >
+          <h2 className="mb-8 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground/20">
+            Review &amp; Select
+          </h2>
+
+          {/* Flight selection */}
+          {flights.length > 0 && (
+            <div className="mb-8">
+              <div className="mb-3 flex items-center gap-2">
+                <Plane size={16} className="text-cyan" />
+                <h3 className="text-sm font-semibold text-foreground/60">
+                  Select Flight
+                  {analysis && (
+                    <span className="ml-2 text-xs font-normal text-foreground/25">
+                      {analysis.originIATA} &rarr; {analysis.destinationIATA}
+                    </span>
+                  )}
+                </h3>
+                <LiveBadge source={agentSources.flight} />
+              </div>
+              <div className="glass-card overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-card-border text-left text-[11px] uppercase tracking-wider text-foreground/30">
+                      <th className="w-8 px-4 py-2.5" />
+                      <th className="px-4 py-2.5 font-medium">Airline</th>
+                      <th className="px-4 py-2.5 font-medium">Departure</th>
+                      <th className="px-4 py-2.5 font-medium">Arrival</th>
+                      <th className="px-4 py-2.5 font-medium">Stops</th>
+                      <th className="px-4 py-2.5 font-medium">Duration</th>
+                      <th className="px-4 py-2.5 font-medium text-right">
+                        Price
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {flights.map((f, i) => (
+                      <tr
+                        key={i}
+                        onClick={() =>
+                          phase === 'review' && setSelectedFlightIdx(i)
+                        }
+                        className={`border-b border-card-border/20 last:border-0 transition-all duration-150 ${
+                          phase === 'review'
+                            ? 'cursor-pointer hover:bg-white/[0.02]'
+                            : ''
+                        } ${
+                          i === selectedFlightIdx
+                            ? 'bg-cyan/[0.06]'
+                            : ''
+                        }`}
+                      >
+                        <td className="px-4 py-3">
+                          <div
+                            className={`flex h-5 w-5 items-center justify-center rounded-full border transition-colors ${
+                              i === selectedFlightIdx
+                                ? 'border-cyan bg-cyan/20'
+                                : 'border-foreground/15'
+                            }`}
+                          >
+                            {i === selectedFlightIdx && (
+                              <Check size={12} className="text-cyan" />
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-foreground/80">
+                          {f.airline}
+                        </td>
+                        <td className="px-4 py-3 tabular-nums text-foreground/60">
+                          {fmtClock(f.departureTime)}
+                        </td>
+                        <td className="px-4 py-3 tabular-nums text-foreground/60">
+                          {fmtClock(f.arrivalTime)}
+                        </td>
+                        <td className="px-4 py-3 text-foreground/50">
+                          {f.stops === 0 ? (
+                            <span className="text-green/80">Direct</span>
+                          ) : (
+                            `${f.stops} stop${f.stops > 1 ? 's' : ''}`
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-foreground/40">
+                          {f.duration}
+                        </td>
+                        <td
+                          className={`px-4 py-3 text-right font-semibold tabular-nums ${
+                            i === selectedFlightIdx
+                              ? 'text-cyan'
+                              : 'text-foreground/60'
+                          }`}
+                        >
+                          {f.price}\u20AC
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Hotel selection */}
+          {hotels.length > 0 && (
+            <div className="mb-8">
+              <div className="mb-3 flex items-center gap-2">
+                <Building2 size={16} className="text-amber" />
+                <h3 className="text-sm font-semibold text-foreground/60">
+                  Select Hotel
+                </h3>
+                <LiveBadge source={agentSources.hotel} />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {hotels.map((h, i) => (
+                  <div
+                    key={i}
+                    onClick={() =>
+                      phase === 'review' && setSelectedHotelIdx(i)
+                    }
+                    className={`glass-card p-4 transition-all duration-200 ${
+                      phase === 'review'
+                        ? 'cursor-pointer hover:border-amber/30'
+                        : ''
+                    } ${
+                      i === selectedHotelIdx
+                        ? 'border-amber/40 bg-amber/[0.04]'
+                        : ''
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          {i === selectedHotelIdx && (
+                            <CheckCircle size={14} className="text-amber" />
+                          )}
+                          <h4 className="text-sm font-medium text-foreground/90">
+                            {h.name}
+                          </h4>
+                        </div>
+                        <p className="mt-0.5 text-xs text-foreground/40">
+                          {h.area}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 rounded bg-amber/10 px-1.5 py-0.5 text-xs font-semibold text-amber">
+                        <Star size={10} className="fill-amber" />
+                        {h.rating}
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between border-t border-card-border/30 pt-3">
+                      <div className="flex items-center gap-1 text-[11px] text-foreground/40">
+                        <TrainFront size={11} />
+                        {h.metroStation} ({h.metroDistance})
+                      </div>
+                      <div className="text-sm font-semibold text-amber">
+                        {h.pricePerNight}\u20AC
+                        <span className="ml-0.5 text-[10px] font-normal text-foreground/30">
+                          /night
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Compose button */}
+          {phase === 'review' && (
+            <div className="flex justify-center pt-2 animate-fade-in-up">
+              <button
+                onClick={startCompose}
+                className="inline-flex items-center justify-center gap-2.5 rounded-lg bg-gradient-to-r from-pink/90 to-purple/90 px-8 py-3.5 text-base font-semibold tracking-wide text-white transition-all duration-200 hover:from-pink hover:to-purple active:scale-[0.97] cursor-pointer"
+              >
+                <PenTool size={18} />
+                Compose Response
+              </button>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ===== SECTION 4 — COMPOSE ===== */}
+      {(phase === 'composing' || phase === 'done') && (
+        <section
+          ref={composeRef}
+          className="relative z-10 mx-auto max-w-4xl px-6 pb-24 animate-fade-in-up"
+        >
+          <h2 className="mb-6 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground/20">
+            {isStreaming ? 'Composing response...' : 'Response Ready'}
+          </h2>
+
+          <div
+            className="glass-card overflow-hidden transition-colors duration-500"
+            style={{
+              borderColor: isStreaming
+                ? 'rgba(236, 72, 153, 0.2)'
+                : 'rgba(16, 185, 129, 0.2)',
+            }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-card-border px-6 py-3.5">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-300 ${
+                    isStreaming
+                      ? 'bg-pink/10 text-pink'
+                      : 'bg-green/10 text-green'
+                  }`}
+                >
+                  {isStreaming ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <CheckCircle size={16} />
+                  )}
+                </div>
+                <span className="text-sm font-medium text-foreground/60">
+                  {isStreaming ? 'Writing...' : 'Complete'}
+                </span>
+              </div>
+
+              {!isStreaming && composedEmail && (
+                <button
+                  onClick={copyEmail}
+                  className="flex items-center gap-2 rounded-lg bg-card border border-card-border px-4 py-2 text-xs font-medium text-foreground/60 transition-all hover:border-foreground/20 hover:text-foreground cursor-pointer"
+                >
+                  {copied ? (
+                    <Check size={14} className="text-green" />
+                  ) : (
+                    <Copy size={14} />
+                  )}
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              )}
+            </div>
+
+            {/* Body */}
+            <div className="min-h-[200px] px-6 py-5">
+              <div className="whitespace-pre-wrap font-sans text-base leading-relaxed text-foreground/80">
+                {composedEmail}
+                {isStreaming && (
+                  <span className="animate-blink ml-0.5 inline-block h-5 w-[2px] translate-y-[3px] bg-pink/70" />
+                )}
+              </div>
+            </div>
           </div>
-        )}
 
-        {/* ===== ANALYZING ===== */}
-        {phase === 'analyzing' && (
-          <div className="flex w-full max-w-4xl flex-col items-center gap-6">
-            <EmailInbox visible compact />
-            <div className="w-full max-w-md">
-              <AgentCard
-                icon={AGENT_ICONS.email}
-                name={AGENT_NAMES.email}
-                color={AGENT_COLORS.email}
-                status={agentStatuses.email || 'idle'}
-                message={agentMessages.email || ''}
-                elapsed={agentTimes.email}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* ===== PROCESSING ===== */}
-        {phase === 'processing' && (
-          <div className="flex w-full max-w-6xl gap-8">
-            {/* Left: agents */}
-            <div className="w-72 flex-shrink-0 space-y-2">
-              <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-foreground/25">
-                Active Agents
-              </h2>
-              {(['email', 'flight', 'hotel', 'research', 'places'] as const).map((id, i) => (
-                <AgentCard
-                  key={id}
-                  icon={AGENT_ICONS[id]}
-                  name={AGENT_NAMES[id]}
-                  color={AGENT_COLORS[id]}
-                  status={agentStatuses[id] || 'idle'}
-                  message={agentMessages[id] || ''}
-                  delay={i * 80}
-                  elapsed={agentTimes[id]}
-                />
-              ))}
-            </div>
-
-            {/* Right: results */}
-            <div className="min-w-0 flex-1">
-              <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-foreground/25">
-                Results
-              </h2>
-              <ResultsPanel
-                flights={flights}
-                hotels={hotels}
-                places={places}
-                research={research}
-              />
-              {!flights && !hotels && !places && !research && (
-                <div className="glass-card flex h-40 items-center justify-center">
-                  <p className="text-xs text-foreground/25">
-                    Waiting for results...
+          {/* Done footer */}
+          {phase === 'done' && (
+            <div className="mt-8 flex flex-col items-center gap-6 animate-fade-in">
+              {totalTime > 0 && (
+                <div className="text-center">
+                  <p className="flex items-center justify-center gap-2 text-lg">
+                    <Clock size={18} className="text-teal" />
+                    <span className="text-foreground/50">Processed in</span>
+                    <span className="font-bold text-teal tabular-nums">
+                      {totalTime}s
+                    </span>
+                  </p>
+                  <p className="mt-1 text-sm text-foreground/25">
+                    Manually, this takes 30&ndash;45 minutes
                   </p>
                 </div>
               )}
-            </div>
-          </div>
-        )}
 
-        {/* ===== REVIEW ===== */}
-        {phase === 'review' && (
-          <div className="flex w-full max-w-5xl flex-col items-center gap-8">
-            <div className="animate-fade-in text-center">
-              <h2 className="text-2xl font-bold text-foreground">
-                All data collected
-              </h2>
-              <p className="mt-1.5 text-sm text-foreground/40">
-                Ready to compose response email
-              </p>
+              <button
+                onClick={reset}
+                className="inline-flex items-center justify-center gap-2.5 rounded-lg bg-card border border-card-border px-6 py-2.5 text-sm font-semibold text-foreground/70 transition-all hover:border-foreground/20 hover:text-foreground active:scale-[0.97] cursor-pointer"
+              >
+                <RotateCcw size={15} />
+                New Email
+              </button>
             </div>
-            <ResultsPanel
-              flights={flights}
-              hotels={hotels}
-              places={places}
-              research={research}
-            />
-            <div className="animate-fade-in-up stagger-3">
-              <ActionButton
-                label="Compose Response"
-                icon={<PenTool size={16} />}
-                onClick={usedLiveApi ? runComposer : runComposer}
-                size="large"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* ===== COMPOSING ===== */}
-        {phase === 'composing' && (
-          <div className="flex w-full max-w-4xl flex-col items-center gap-6">
-            <AgentCard
-              icon={AGENT_ICONS.composer}
-              name={AGENT_NAMES.composer}
-              color={AGENT_COLORS.composer}
-              status={agentStatuses.composer || 'idle'}
-              message={agentMessages.composer || ''}
-              elapsed={agentTimes.composer}
-            />
-            <EmailComposer
-              text={composedEmail}
-              isStreaming={isStreaming}
-              visible
-            />
-          </div>
-        )}
-
-        {/* ===== DONE ===== */}
-        {phase === 'done' && (
-          <div className="flex w-full max-w-4xl flex-col items-center gap-6">
-            <div className="animate-fade-in text-center">
-              <h2 className="text-2xl font-bold text-foreground">
-                Complete
-              </h2>
-              {totalTime > 0 && (
-                <p className="mt-1.5 flex items-center justify-center gap-1.5 text-sm text-foreground/40">
-                  <Clock size={14} />
-                  Total time:{' '}
-                  <span className="font-semibold text-teal tabular-nums">{totalTime}s</span>
-                </p>
-              )}
-            </div>
-            <EmailComposer
-              text={composedEmail}
-              isStreaming={false}
-              visible
-              onSend={() => alert('Email sent! (demo)')}
-            />
-            <ActionButton
-              label="Restart"
-              icon={<RefreshCw size={15} />}
-              onClick={resetAll}
-              variant="secondary"
-            />
-          </div>
-        )}
-      </main>
+          )}
+        </section>
+      )}
 
       {/* Footer */}
       <footer className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/[0.04] bg-navy-deep/80 backdrop-blur-sm">

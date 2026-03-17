@@ -3,7 +3,7 @@
 ## Project Overview
 An agentic AI travel assistant that demonstrates how multiple AI agents collaborate to handle a customer email inquiry. Built as a live demo for a tourism industry conference presentation.
 
-**Scenario:** A German couple emails a travel agency asking for help planning a week in Greece. The system reads the email, dispatches specialized agents (flights, hotels, research), and composes a complete response — all in real-time with a visual UI.
+**Concept: "Your AI Employee"** — Show that this system can handle ANY real travel inquiry in real-time, not a pre-scripted demo. A text area accepts any customer email, AI agents process it live, the user reviews and selects options, then AI composes a professional response.
 
 ## Architecture
 
@@ -13,7 +13,7 @@ An agentic AI travel assistant that demonstrates how multiple AI agents collabor
 │  (Real-time agent status, results, email)    │
 ├─────────────────────────────────────────────┤
 │              API Routes (Edge)               │
-│         /api/orchestrate (SSE stream)        │
+│  /api/orchestrate + /api/compose (SSE)       │
 ├─────────────────────────────────────────────┤
 │            Orchestrator Agent                │
 │  Reads email → dispatches agents → collects  │
@@ -33,7 +33,7 @@ An agentic AI travel assistant that demonstrates how multiple AI agents collabor
 - **Streaming:** Server-Sent Events (SSE) for real-time agent updates
 - **AI:** OpenAI API (gpt-4o)
 - **Flight Data:** Duffel API (test mode — no signup needed)
-- **Hotel Data:** Curated mock data + Claude enhancement (guaranteed reliability)
+- **Hotel Data:** Curated mock data (guaranteed reliability)
 - **Places/POI:** Google Places API (New, v1)
 - **Language:** TypeScript throughout
 
@@ -62,30 +62,25 @@ ai-travel-agent/
 │   │   ├── layout.tsx
 │   │   ├── page.tsx                  # Main demo UI
 │   │   └── api/
-│   │       └── orchestrate/
-│   │           └── route.ts          # SSE endpoint — orchestrator
+│   │       ├── orchestrate/
+│   │       │   └── route.ts          # SSE endpoint — analysis + agents
+│   │       └── compose/
+│   │           └── route.ts          # SSE endpoint — compose with selections
 │   ├── agents/
 │   │   ├── types.ts                  # Shared types for all agents
 │   │   ├── orchestrator.ts           # Main orchestrator logic
 │   │   ├── email-analyzer.ts         # Parses & extracts intent from email
 │   │   ├── flight-agent.ts           # Duffel API flight search
-│   │   ├── hotel-agent.ts            # Mock data + Claude enrichment
-│   │   ├── research-agent.ts         # Claude web search for itinerary
+│   │   ├── hotel-agent.ts            # Mock hotel data
+│   │   ├── research-agent.ts         # GPT-4o itinerary generation
 │   │   ├── places-agent.ts           # Google Places for restaurants, sights
-│   │   └── composer-agent.ts         # Claude API — composes final email
+│   │   └── composer-agent.ts         # GPT-4o — composes final email
 │   ├── lib/
 │   │   ├── duffel.ts                 # Duffel API client
 │   │   ├── google-places.ts          # Google Places API client
 │   │   ├── ai.ts                     # OpenAI API helper
 │   │   └── mock-hotels.ts            # Curated Athens hotel data
-│   └── components/
-│       ├── DemoPanel.tsx             # Main demo container
-│       ├── EmailInbox.tsx            # Shows incoming email
-│       ├── AgentStatusBar.tsx        # Top bar with agent statuses
-│       ├── AgentCard.tsx             # Individual agent progress card
-│       ├── ResultsPanel.tsx          # Flight/hotel/places results
-│       ├── EmailComposer.tsx         # Streaming composed email
-│       └── ActionButton.tsx          # Start/Review/Send buttons
+│   └── (all UI inlined in page.tsx — no separate components)
 ```
 
 ## Agent Definitions
@@ -117,8 +112,8 @@ ai-travel-agent/
 
 ### 4. Research Agent
 - **Input:** Destination, interests, duration
-- **Process:** OpenAI API with system prompt for Greece travel expertise
-- **Output:** Day-by-day itinerary suggestions, local tips, island recommendations
+- **Process:** OpenAI API with system prompt for travel expertise (any destination)
+- **Output:** Day-by-day itinerary suggestions, local tips, day trip suggestions
 - **API:** OpenAI (gpt-4o)
 
 ### 5. Places Agent
@@ -129,33 +124,45 @@ ai-travel-agent/
 - **Fallback:** Mock places data if API fails
 
 ### 6. Composer Agent
-- **Input:** All agent results + original email
+- **Input:** All agent results + original email + user's flight/hotel selections
 - **Process:** OpenAI API call to synthesize everything into response email
 - **Output:** Professional, warm response email — streamed token by token
 - **API:** OpenAI (gpt-4o, streaming)
+- **Selection-aware:** Highlights user's chosen flight/hotel as recommendations
 
 ## SSE Event Format
-Each agent sends events through the SSE stream:
+### /api/orchestrate — analysis + 4 agents
 ```typescript
 type AgentEvent = {
-  agent: 'email' | 'flight' | 'hotel' | 'research' | 'places' | 'composer';
-  status: 'started' | 'working' | 'done' | 'error';
-  message: string;         // Human-readable status in Greek
+  agent: 'email' | 'flight' | 'hotel' | 'research' | 'places';
+  status: 'started' | 'done' | 'error';
+  message: string;
   data?: any;              // Results when done
+  source?: 'live' | 'mock';
   timestamp: number;
 }
 ```
 
+### /api/compose — streaming email composition
+```typescript
+// Each SSE line: data: {"chunk": "partial text"}
+// Final line:    data: [DONE]
+```
+
 ## UI Flow / Phases
-1. **landing** — "Εκκίνηση Demo" button with scenario description
-2. **email-arrived** — Animated inbox notification, email content displayed
-3. **analyzing** — Email Analyzer agent runs (sequential, ~2s)
-4. **processing** — Flight, Hotel, Research, Places run in PARALLEL
-   - Each agent shows: icon → spinner → results when done
-   - Results panels appear progressively as agents complete
-5. **review** — Summary panel with all findings + "Σύνθεση Απάντησης" button
-6. **composing** — Streaming email composition (token by token, ~10s)
-7. **done** — Final email displayed, timing stat, "Επανεκκίνηση" button
+1. **input** — Text area pre-filled with demo email, "Process Email" button
+   - User can paste ANY email in any language
+2. **processing** — Text area locks, Agent Pipeline section appears:
+   - Email Analysis with extracted key-value data
+   - 4-column grid (Flights, Hotels, Research, Places) with live status
+   - Each column: spinner → API info → results + elapsed time + LIVE badge
+3. **review** — "Review & Select" section auto-appears when all agents done
+   - Flights: clickable table rows (first pre-selected)
+   - Hotels: clickable cards (first pre-selected)
+   - "Compose Response" button
+4. **composing** — GPT-4o streams response email token by token
+   - Incorporates user's flight & hotel selections
+5. **done** — "Response Ready" with copy button, total time, "New Email" reset
 
 ## Duffel API Reference
 - **Base URL:** https://api.duffel.com
@@ -285,26 +292,10 @@ const ATHENS_HOTELS = [
 ];
 ```
 
-## Demo Email (hardcoded)
-```
-From: klaus.mueller@gmail.com
-Subject: Trip to Greece - next week availability?
-
-Guten Tag,
-
-We are Klaus and Anna Mueller from Hamburg, Germany. We are planning a trip to Greece for next week (7 days) and we are looking for:
-
-- Flights from Hamburg to Athens (arriving Monday morning if possible)
-- A nice hotel in central Athens, close to metro, mid-range budget (~120-150€/night)
-- A complete travel plan: what to see, where to eat, day trips from Athens
-- We love history, local food, and walking around neighborhoods
-- We would also like to visit one island for 2 days if possible
-
-Could you please help us organize everything?
-
-Best regards,
-Klaus & Anna Mueller
-```
+## Demo Email (pre-filled, editable)
+The text area is pre-filled with a German couple's Greece trip request, but the user
+(presenter or audience member) can paste ANY email. The entire pipeline adapts to
+whatever origin, destination, dates, language, and interests are in the email.
 
 ## Design System
 - **Background:** Dark navy gradient (#0B1D3A → #0F2E5A)
@@ -322,23 +313,12 @@ Klaus & Anna Mueller
 
 ## Important Rules
 - **Resilience:** Every agent has a try/catch with fallback mock data. Demo MUST NOT break.
+- **Dynamic:** Accepts any email, any language, any destination. Pipeline adapts.
+- **No fake delays:** All timing is from real API calls. No artificial setTimeouts.
+- **LIVE badges:** Results from real APIs show a green "LIVE" badge; mock data does not.
 - **Streaming:** All status updates push via SSE immediately. UI feels alive.
-- **Timing:** Total demo should complete in 30-60 seconds.
-- **Parallel:** Flight, Hotel, Research, Places agents run simultaneously (Promise.allSettled).
+- **Parallel:** Flight, Hotel, Research, Places agents run simultaneously.
+- **Human-in-the-loop:** User selects flight + hotel before compose step.
 - **No hardcoded keys:** Everything from .env.local
-- **Greek UI labels:** Agent names and status messages in Greek for the conference audience.
-- **Mobile-responsive:** But optimized for large screen projection.
-
-## Development Order
-1. Scaffold Next.js + Tailwind + env setup
-2. Build Duffel client (simple fetch with Bearer token)
-3. Build Google Places client
-4. Build Claude API helper (analyze, research, compose)
-5. Build mock-hotels data module
-6. Build each agent as independent async function
-7. Build orchestrator (sequential email analysis → parallel agents → composer)
-8. Build API route with SSE streaming
-9. Build UI components (one by one)
-10. Wire everything together
-11. Test end-to-end with real API keys
-12. Polish animations, timing, error handling
+- **English UI labels:** Clean, professional labels for international conference audience.
+- **Projector-optimized:** Min 16px body, 24px+ headers, dark navy theme, 1920x1080.

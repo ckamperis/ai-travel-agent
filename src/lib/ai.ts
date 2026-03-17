@@ -69,14 +69,14 @@ export async function researchDestination(
     messages: [
       {
         role: "system",
-        content: `You are an expert Greece travel advisor. Provide detailed, practical travel recommendations.
+        content: `You are an expert travel advisor. Provide detailed, practical travel recommendations.
 Include day-by-day suggestions, local tips, and insider knowledge.
 Write in a warm, professional tone suitable for a travel agency response.
 Focus on: ${interests.join(", ")}.`,
       },
       {
         role: "user",
-        content: `Create a ${days}-day travel itinerary for ${destination}. Include must-see sights, recommended restaurants, neighborhood walks, and a day trip suggestion. If relevant, suggest a 2-day island excursion.`,
+        content: `Create a ${days}-day travel itinerary for ${destination}. Include must-see sights, recommended restaurants, neighborhood walks, and day trip suggestions.`,
       },
     ],
   });
@@ -87,6 +87,8 @@ Focus on: ${interests.join(", ")}.`,
 export async function* composeEmail(
   allResults: {
     emailAnalysis: EmailAnalysis;
+    selectedFlight?: unknown;
+    selectedHotel?: unknown;
     flights: unknown[];
     hotels: unknown[];
     research: string;
@@ -96,6 +98,18 @@ export async function* composeEmail(
 ): AsyncGenerator<string> {
   const client = getClient();
 
+  const selectionInstructions: string[] = [];
+  if (allResults.selectedFlight) {
+    selectionInstructions.push(
+      `RECOMMENDED FLIGHT (present this as your primary recommendation):\n${JSON.stringify(allResults.selectedFlight, null, 2)}`
+    );
+  }
+  if (allResults.selectedHotel) {
+    selectionInstructions.push(
+      `RECOMMENDED HOTEL (present this as your primary recommendation):\n${JSON.stringify(allResults.selectedHotel, null, 2)}`
+    );
+  }
+
   const stream = await client.chat.completions.create({
     model: MODEL,
     max_tokens: 3000,
@@ -103,15 +117,15 @@ export async function* composeEmail(
     messages: [
       {
         role: "system",
-        content: `You are a professional travel agent composing a response email.
+        content: `You are a professional travel agent at Afea Travel composing a response email.
 Write a warm, detailed, and well-organized response that:
 - Addresses the customer by name
-- Presents flight options in a clear format
-- Recommends hotels with key details
+- ${allResults.selectedFlight ? 'Presents the RECOMMENDED flight prominently, then briefly mentions 1-2 alternatives' : 'Presents flight options in a clear format'}
+- ${allResults.selectedHotel ? 'Presents the RECOMMENDED hotel prominently, then briefly mentions alternatives' : 'Recommends hotels with key details'}
 - Includes the travel itinerary highlights
 - Mentions recommended restaurants and places
-- Ends with a professional closing
-- Write in English (the customers wrote in English despite being German)
+- Ends with a professional closing and next steps
+- Write in the same language the customer used in their email
 - Use clean formatting with sections and bullet points`,
       },
       {
@@ -122,10 +136,10 @@ ${originalEmail}
 Email analysis:
 ${JSON.stringify(allResults.emailAnalysis, null, 2)}
 
-Flight options found:
+${selectionInstructions.length > 0 ? selectionInstructions.join('\n\n') + '\n\n' : ''}All flight options found:
 ${JSON.stringify(allResults.flights, null, 2)}
 
-Hotel recommendations:
+All hotel options:
 ${JSON.stringify(allResults.hotels, null, 2)}
 
 Travel research & itinerary:
