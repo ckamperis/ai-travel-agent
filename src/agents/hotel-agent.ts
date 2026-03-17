@@ -7,7 +7,7 @@ export async function searchHotels(analysis: EmailAnalysis): Promise<HotelResult
       ? { min: analysis.budget.min, max: analysis.budget.max }
       : undefined;
 
-    const hotels = getHotels(budget);
+    const hotels = getHotels(budget, analysis.destination);
 
     return hotels.slice(0, 4).map((h) => ({
       name: h.name,

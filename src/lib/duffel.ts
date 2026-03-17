@@ -19,51 +19,91 @@ export interface FlightSegment {
   arrivalTime: string;
 }
 
-const MOCK_FLIGHTS: FlightOffer[] = [
-  {
-    airline: "Aegean Airlines",
-    price: 289,
-    currency: "EUR",
-    departureTime: "2025-08-04T06:30:00",
-    arrivalTime: "2025-08-04T10:45:00",
-    origin: "HAM",
-    destination: "ATH",
-    stops: 0,
-    duration: "3h 15m",
-    segments: [
-      { carrier: "Aegean Airlines", origin: "HAM", destination: "ATH", departureTime: "2025-08-04T06:30:00", arrivalTime: "2025-08-04T10:45:00" },
-    ],
-  },
-  {
-    airline: "Lufthansa",
-    price: 342,
-    currency: "EUR",
-    departureTime: "2025-08-04T07:15:00",
-    arrivalTime: "2025-08-04T13:20:00",
-    origin: "HAM",
-    destination: "ATH",
-    stops: 1,
-    duration: "5h 05m",
-    segments: [
-      { carrier: "Lufthansa", origin: "HAM", destination: "MUC", departureTime: "2025-08-04T07:15:00", arrivalTime: "2025-08-04T08:30:00" },
-      { carrier: "Lufthansa", origin: "MUC", destination: "ATH", departureTime: "2025-08-04T09:45:00", arrivalTime: "2025-08-04T13:20:00" },
-    ],
-  },
-  {
-    airline: "Ryanair",
-    price: 178,
-    currency: "EUR",
-    departureTime: "2025-08-04T05:50:00",
-    arrivalTime: "2025-08-04T10:10:00",
-    origin: "HAM",
-    destination: "ATH",
-    stops: 0,
-    duration: "3h 20m",
-    segments: [
-      { carrier: "Ryanair", origin: "HAM", destination: "ATH", departureTime: "2025-08-04T05:50:00", arrivalTime: "2025-08-04T10:10:00" },
-    ],
-  },
+/* ── Dynamic mock flight generator ─────────────────────────────── */
+
+const AIRLINES = [
+  "Aegean Airlines", "Lufthansa", "Ryanair", "Austrian Airlines",
+  "EasyJet", "Vueling", "Air France", "KLM", "Swiss", "Turkish Airlines",
+  "ITA Airways", "Iberia", "TAP Portugal", "Wizz Air", "SAS",
 ];
+
+const HUBS = ["MUC", "FRA", "VIE", "ZRH", "IST", "CDG", "AMS", "FCO", "MAD"];
+
+function generateMockFlights(
+  origin: string,
+  destination: string,
+  departureDate: string
+): FlightOffer[] {
+  const date = departureDate || new Date().toISOString().split("T")[0];
+
+  // Pick 3-4 airlines (seeded by route so same route = same results)
+  const seed = (origin + destination).split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  const pick = (arr: string[], n: number) => {
+    const shuffled = [...arr].sort((a, b) => {
+      const ha = (seed * a.charCodeAt(0)) % 997;
+      const hb = (seed * b.charCodeAt(0)) % 997;
+      return ha - hb;
+    });
+    return shuffled.slice(0, n);
+  };
+
+  const airlines = pick(AIRLINES, 4);
+  const hub = HUBS[seed % HUBS.length];
+
+  const flights: FlightOffer[] = [];
+
+  // Direct flight
+  flights.push({
+    airline: airlines[0],
+    price: 180 + (seed % 150),
+    currency: "EUR",
+    departureTime: `${date}T06:30:00`,
+    arrivalTime: `${date}T10:15:00`,
+    origin, destination, stops: 0, duration: "3h 45m",
+    segments: [{ carrier: airlines[0], origin, destination, departureTime: `${date}T06:30:00`, arrivalTime: `${date}T10:15:00` }],
+  });
+
+  // 1-stop via hub
+  flights.push({
+    airline: airlines[1],
+    price: 220 + (seed % 130),
+    currency: "EUR",
+    departureTime: `${date}T07:15:00`,
+    arrivalTime: `${date}T13:20:00`,
+    origin, destination, stops: 1, duration: "6h 05m",
+    segments: [
+      { carrier: airlines[1], origin, destination: hub, departureTime: `${date}T07:15:00`, arrivalTime: `${date}T08:45:00` },
+      { carrier: airlines[1], origin: hub, destination, departureTime: `${date}T10:00:00`, arrivalTime: `${date}T13:20:00` },
+    ],
+  });
+
+  // Budget direct
+  flights.push({
+    airline: airlines[2],
+    price: 120 + (seed % 80),
+    currency: "EUR",
+    departureTime: `${date}T05:50:00`,
+    arrivalTime: `${date}T09:30:00`,
+    origin, destination, stops: 0, duration: "3h 40m",
+    segments: [{ carrier: airlines[2], origin, destination, departureTime: `${date}T05:50:00`, arrivalTime: `${date}T09:30:00` }],
+  });
+
+  // Afternoon option
+  flights.push({
+    airline: airlines[3],
+    price: 260 + (seed % 100),
+    currency: "EUR",
+    departureTime: `${date}T14:00:00`,
+    arrivalTime: `${date}T17:45:00`,
+    origin, destination, stops: 0, duration: "3h 45m",
+    segments: [{ carrier: airlines[3], origin, destination, departureTime: `${date}T14:00:00`, arrivalTime: `${date}T17:45:00` }],
+  });
+
+  flights.sort((a, b) => a.price - b.price);
+  return flights;
+}
+
+/* ── Duffel API ────────────────────────────────────────────────── */
 
 function calculateDuration(departureAt: string, arrivalAt: string): string {
   const dep = new Date(departureAt);
@@ -115,8 +155,8 @@ export async function searchFlights(
 ): Promise<FlightOffer[]> {
   const apiKey = process.env.DUFFEL_API_KEY;
   if (!apiKey) {
-    console.warn("DUFFEL_API_KEY not set — returning mock flights");
-    return MOCK_FLIGHTS;
+    console.warn("DUFFEL_API_KEY not set — returning dynamic mock flights");
+    return generateMockFlights(origin, destination, departureDate);
   }
 
   try {
@@ -141,15 +181,15 @@ export async function searchFlights(
     if (!res.ok) {
       const errorText = await res.text();
       console.error(`Duffel API error ${res.status}: ${errorText}`);
-      return MOCK_FLIGHTS;
+      return generateMockFlights(origin, destination, departureDate);
     }
 
     const json = await res.json();
     const offers = json.data?.offers ?? [];
 
     if (offers.length === 0) {
-      console.warn("Duffel returned no offers — using mock data");
-      return MOCK_FLIGHTS;
+      console.warn("Duffel returned no offers — using dynamic mock data");
+      return generateMockFlights(origin, destination, departureDate);
     }
 
     const parsed = offers.map(parseOffer);
@@ -157,6 +197,6 @@ export async function searchFlights(
     return parsed.slice(0, 5);
   } catch (error) {
     console.error("Duffel API call failed:", error);
-    return MOCK_FLIGHTS;
+    return generateMockFlights(origin, destination, departureDate);
   }
 }

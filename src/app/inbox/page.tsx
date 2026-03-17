@@ -120,8 +120,8 @@ export default function InboxPage() {
   const [hotels, setHotels] = useState<HotelResult[]>([]);
   const [research, setResearch] = useState('');
   const [places, setPlaces] = useState<PlaceResult[]>([]);
-  const [selectedFlightIdx, setSelectedFlightIdx] = useState(0);
-  const [selectedHotelIdx, setSelectedHotelIdx] = useState(0);
+  const [selectedFlightIdx, setSelectedFlightIdx] = useState(-1);
+  const [selectedHotelIdx, setSelectedHotelIdx] = useState(-1);
   const [includedPlaces, setIncludedPlaces] = useState<Set<string>>(new Set());
   const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentStatus>>({});
   const [agentTimes, setAgentTimes] = useState<Record<string, number>>({});
@@ -243,7 +243,7 @@ export default function InboxPage() {
               if (source) setAgentSources(p => ({ ...p, [agent]: source }));
               if (agent === 'flight') { setFlights((data as FlightResult[]) || []); addToast(`${((data as FlightResult[]) || []).length} flights found`, 'success'); }
               if (agent === 'hotel') { setHotels((data as HotelResult[]) || []); addToast(`${((data as HotelResult[]) || []).length} hotels found`, 'success'); }
-              if (agent === 'research') { setResearch((data as string) || ''); }
+              if (agent === 'research') { setResearch(stripMarkdown((data as string) || '')); }
               if (agent === 'places') { const p = (data as PlaceResult[]) || []; setPlaces(p); setIncludedPlaces(new Set(p.map(pl => pl.name))); }
               completedRef.current++;
             } else if (status === 'error') {
@@ -624,8 +624,9 @@ export default function InboxPage() {
           {/* Bottom actions */}
           <div className="flex items-center gap-4 mt-8 pt-6 border-t border-card-border/30">
             <button onClick={() => setStep(2)} className="inline-flex items-center gap-2 rounded-lg bg-card border border-card-border px-5 py-2.5 text-sm font-medium text-foreground/60 hover:border-foreground/20 cursor-pointer transition-all"><ArrowLeft size={15} /> Back</button>
-            <button onClick={startCompose} disabled={!allAgentsDone} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-pink/90 to-purple/90 px-6 py-2.5 text-sm font-semibold text-white transition-all hover:from-pink hover:to-purple active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:pointer-events-none"><PenTool size={15} /> Compose Response</button>
+            <button onClick={startCompose} disabled={!allAgentsDone || selectedFlightIdx < 0 || selectedHotelIdx < 0} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-pink/90 to-purple/90 px-6 py-2.5 text-sm font-semibold text-white transition-all hover:from-pink hover:to-purple active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:pointer-events-none"><PenTool size={15} /> Compose Response</button>
             {!allAgentsDone && <span className="text-xs text-foreground/25">Waiting for all agents to complete...</span>}
+            {allAgentsDone && (selectedFlightIdx < 0 || selectedHotelIdx < 0) && <span className="text-xs text-amber">Select a flight and hotel before composing</span>}
           </div>
         </div>
       )}
