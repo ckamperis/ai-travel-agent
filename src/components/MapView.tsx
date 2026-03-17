@@ -1,8 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { APIProvider, Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
-import { useTheme } from './ThemeProvider';
+import { APIProvider, Map, Marker } from '@vis.gl/react-google-maps';
 
 interface Location {
   lat: number;
@@ -18,11 +17,8 @@ interface MapViewProps {
   height?: number;
 }
 
-const DARK_STYLE = '739af084373f96fe';
-
 export default function MapView({ locations, selectedIndex, onSelect, height = 300 }: MapViewProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || '';
-  const { theme } = useTheme();
 
   const center = useMemo(() => {
     if (locations.length === 0) return { lat: 37.98, lng: 23.73 };
@@ -46,7 +42,6 @@ export default function MapView({ locations, selectedIndex, onSelect, height = 3
         <Map
           defaultCenter={center}
           defaultZoom={locations.length === 1 ? 14 : 12}
-          mapId={theme === 'dark' ? DARK_STYLE : undefined}
           gestureHandling="cooperative"
           disableDefaultUI
           zoomControl
@@ -55,19 +50,17 @@ export default function MapView({ locations, selectedIndex, onSelect, height = 3
           {locations.map((loc, i) => {
             const isSelected = i === selectedIndex;
             return (
-              <AdvancedMarker
+              <Marker
                 key={i}
                 position={{ lat: loc.lat, lng: loc.lng }}
                 title={loc.label}
                 onClick={() => onSelect?.(i)}
-              >
-                <Pin
-                  background={isSelected ? '#0066FF' : (loc.color || '#6B7280')}
-                  borderColor={isSelected ? '#0044CC' : '#FFFFFF'}
-                  glyphColor="#FFFFFF"
-                  scale={isSelected ? 1.2 : 1}
-                />
-              </AdvancedMarker>
+                icon={isSelected ? undefined : {
+                  url: `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="36" viewBox="0 0 24 36"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 24 12 24s12-15 12-24C24 5.4 18.6 0 12 0z" fill="${loc.color || '#6B7280'}"/><circle cx="12" cy="12" r="5" fill="white"/></svg>`)}`,
+                  scaledSize: { width: 24, height: 36, equals: () => false },
+                  anchor: { x: 12, y: 36, equals: () => false },
+                }}
+              />
             );
           })}
         </Map>
