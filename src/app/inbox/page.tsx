@@ -15,7 +15,7 @@ import {
   loadSettings, type AppSettings,
   loadProfile, type Profile,
   addToHistory, findCustomerByEmail, upsertCustomer, type KnownCustomer,
-  addFollowUp, LANGUAGES,
+  addFollowUp, getProcessedSampleIds, LANGUAGES,
 } from '@/lib/settings';
 import { stripMarkdown } from '@/lib/markdown-strip';
 import { emailToHtml } from '@/lib/email-to-html';
@@ -101,11 +101,14 @@ export default function InboxPage() {
   const { addToast } = useToast();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  useEffect(() => { setSettings(loadSettings()); setProfile(loadProfile()); }, []);
+  useEffect(() => { setSettings(loadSettings()); setProfile(loadProfile()); setProcessedSampleIds(getProcessedSampleIds()); }, []);
 
   const [step, setStep] = useState<Step>(1);
   const [emailText, setEmailText] = useState('');
   const [showPaste, setShowPaste] = useState(false);
+  const [currentSampleId, setCurrentSampleId] = useState<string | null>(null);
+  const [showOriginalEmail, setShowOriginalEmail] = useState(false);
+  const [processedSampleIds, setProcessedSampleIds] = useState<Set<string>>(new Set());
 
   // Step 2
   const [analysis, setAnalysis] = useState<EmailAnalysis | null>(null);
@@ -153,8 +156,10 @@ export default function InboxPage() {
   ];
 
   /* ---- Step 1 → 2 ---- */
-  const analyzeEmail = useCallback(async (text: string) => {
+  const analyzeEmail = useCallback(async (text: string, sampleId?: string) => {
     setEmailText(text);
+    setCurrentSampleId(sampleId || null);
+    setShowOriginalEmail(true);
     setStep(2);
     setAnalysisLoading(true);
     setKnownCustomer(null);
@@ -202,9 +207,9 @@ export default function InboxPage() {
     if (!edited) return;
     const finalAnalysis = toAnalysis(edited);
     setAnalysis(finalAnalysis);
-    setStep(3); setActiveTab('flights');
+    setStep(3); setActiveTab('flights'); setShowOriginalEmail(false);
     setFlights([]); setHotels([]); setResearch(''); setPlaces([]);
-    setSelectedFlightIdx(0); setSelectedHotelIdx(0); setIncludedPlaces(new Set());
+    setSelectedFlightIdx(-1); setSelectedHotelIdx(-1); setIncludedPlaces(new Set());
     completedRef.current = 0;
     setAgentStatuses({ flight: 'idle', hotel: 'idle', research: 'idle', places: 'idle' });
     setAgentTimes({}); setAgentSources({}); setAgentMessages({});
@@ -315,13 +320,17 @@ export default function InboxPage() {
           processedAt: new Date().toISOString(), totalTime: total,
           status: text.length > 50 ? 'completed' : 'failed',
           composedResponse: text, customerEmail, customerName: analysis.travelers.names?.[0] || '',
+          sampleEmailId: currentSampleId || undefined,
         });
+        if (currentSampleId) {
+          setProcessedSampleIds(prev => new Set([...prev, currentSampleId]));
+        }
         if (customerEmail) {
           upsertCustomer({ email: customerEmail, name: analysis.travelers.names?.[0] || '', destination: analysis.destination, hotel: hotels[selectedHotelIdx]?.name, budget: `€${analysis.budget.min}-${analysis.budget.max}`, language: analysis.language });
         }
       }
     }
-  }, [emailText, analysis, flights, hotels, research, places, selectedFlightIdx, selectedHotelIdx, includedPlaces, settings, knownCustomer, addToast]);
+  }, [emailText, analysis, flights, hotels, research, places, selectedFlightIdx, selectedHotelIdx, includedPlaces, settings, knownCustomer, currentSampleId, addToast]);
 
   /* ---- Translate ---- */
   const translateTo = useCallback(async (lang: string) => {
@@ -402,8 +411,8 @@ export default function InboxPage() {
           <h1 className="text-2xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>Inbox</h1>
           <p className="text-sm mb-8" style={{ color: 'var(--color-text-secondary)' }}>Select a customer email or paste your own</p>
           <div className="space-y-2 mb-6">
-            {SAMPLE_EMAILS.map(email => (
-              <button key={email.id} onClick={() => analyzeEmail(email.body)}
+            {SAMPLE_EMAILS.filter(e => !processedSampleIds.has(e.id)).map(email => (
+              <button key={email.id} onClick={() => analyzeEmail(email.body, email.id)}
                 className="w-full glass-card flex items-center gap-4 px-5 py-4 text-left transition-all cursor-pointer group"
                 style={{ borderColor: 'var(--color-border)' }}>
                 <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full" style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}><Mail size={18} /></div>
@@ -428,6 +437,31 @@ export default function InboxPage() {
                 <button onClick={() => analyzeEmail(emailText)} disabled={!emailText.trim()} className="inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-semibold transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:pointer-events-none" style={{ background: 'var(--color-primary)', color: '#fff' }}><Send size={15} /> Process</button>
                 <button onClick={() => { setShowPaste(false); setEmailText(''); }} className="text-sm cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>Cancel</button>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===== ORIGINAL EMAIL PANEL (Steps 2-4) ===== */}
+      {step >= 2 && emailText && (
+        <div className="card mb-6 overflow-hidden shadow-sm">
+          <button onClick={() => setShowOriginalEmail(!showOriginalEmail)}
+            className="w-full flex items-center justify-between px-5 py-3 cursor-pointer transition-colors"
+            style={{ borderBottom: showOriginalEmail ? '1px solid var(--color-border)' : 'none' }}>
+            <div className="flex items-center gap-2 text-sm">
+              <Mail size={14} style={{ color: 'var(--color-primary)' }} />
+              <span className="font-medium" style={{ color: 'var(--color-text)' }}>Original Email</span>
+              {analysis && <span style={{ color: 'var(--color-text-muted)' }}>&mdash; {extractEmail(emailText) || 'Customer'}</span>}
+            </div>
+            <ChevronDown size={14} style={{ color: 'var(--color-text-muted)', transform: showOriginalEmail ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+          </button>
+          {showOriginalEmail && (
+            <div className="px-5 py-4 max-h-[240px] overflow-y-auto">
+              <div className="flex gap-4 mb-3 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                <span><b style={{ color: 'var(--color-text-secondary)' }}>From:</b> {extractEmail(emailText) || 'Unknown'}</span>
+                {analysis && <span><b style={{ color: 'var(--color-text-secondary)' }}>Subject:</b> Trip to {analysis.destination}</span>}
+              </div>
+              <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans" style={{ color: 'var(--color-text-secondary)' }}>{emailText}</pre>
             </div>
           )}
         </div>

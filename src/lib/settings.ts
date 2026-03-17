@@ -167,6 +167,7 @@ export interface ProcessedEmail {
   composedResponse?: string;
   customerEmail?: string;
   customerName?: string;
+  sampleEmailId?: string;
 }
 
 export function loadHistory(): ProcessedEmail[] {
@@ -183,6 +184,15 @@ export function addToHistory(entry: ProcessedEmail): void {
   history.unshift(entry);
   if (history.length > 100) history.pop();
   localStorage.setItem('ta-history', JSON.stringify(history));
+}
+
+export function getProcessedSampleIds(): Set<string> {
+  const history = loadHistory();
+  const ids = new Set<string>();
+  for (const h of history) {
+    if (h.sampleEmailId) ids.add(h.sampleEmailId);
+  }
+  return ids;
 }
 
 // ── Known Customers ───────────────────────────────────────────────

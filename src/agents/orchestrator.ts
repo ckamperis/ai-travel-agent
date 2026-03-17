@@ -57,6 +57,7 @@ export async function* orchestrate(
   }
 
   // ── Phase 2: Parallel Agents ──────────────────────────────────────
+  console.log(`[Orchestrator] Dispatching agents for: ${analysis.origin}(${analysis.originIATA}) → ${analysis.destination}(${analysis.destinationIATA}), ${analysis.dates.duration} days`);
   yield makeEvent("flight", "started", `Duffel API: ${analysis.originIATA} → ${analysis.destinationIATA}`);
   yield makeEvent("hotel", "started", `Hotels in ${analysis.destination}`);
   yield makeEvent("research", "started", `GPT-4o: ${analysis.dates.duration}-day itinerary for ${analysis.destination}`);

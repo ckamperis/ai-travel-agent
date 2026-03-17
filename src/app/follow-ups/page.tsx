@@ -113,11 +113,11 @@ export default function FollowUpsPage() {
             <CalendarClock size={18} style={{ color: 'var(--color-amber)' }} />
           </div>
           <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>
-            Follow-ups
+            Follow-up Reminders
           </h1>
         </div>
         <p className="text-sm ml-12" style={{ color: 'var(--color-text-muted)' }}>
-          {pendingCount} pending follow-up{pendingCount !== 1 ? 's' : ''} scheduled
+          Customers who haven&apos;t responded to your proposals &mdash; {pendingCount} pending
         </p>
       </div>
 
@@ -187,11 +187,11 @@ export default function FollowUpsPage() {
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <Calendar size={12} style={{ color: 'var(--color-text-muted)' }} />
-                        Scheduled: {fmtDate(fu.scheduledDate)}
+                        Proposal sent {relativeCreated(fu.createdAt)}
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <Clock size={12} style={{ color: 'var(--color-text-muted)' }} />
-                        Created {relativeCreated(fu.createdAt)}
+                        Follow-up due: {fmtDate(fu.scheduledDate)}
                       </span>
                     </div>
 
@@ -223,7 +223,7 @@ export default function FollowUpsPage() {
                           style={{ background: 'var(--color-green-light)', color: 'var(--color-green)' }}
                         >
                           <CheckCircle size={13} />
-                          Mark Sent
+                          Send Follow-up Reminder
                         </button>
                         <button
                           onClick={() => cancel(fu.id)}

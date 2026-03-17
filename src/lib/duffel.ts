@@ -52,51 +52,52 @@ function generateMockFlights(
 
   const flights: FlightOffer[] = [];
 
-  // Direct flight
+  // Unique time slots spread across the day
+  // Early morning direct
   flights.push({
     airline: airlines[0],
-    price: 180 + (seed % 150),
+    price: 145 + (seed % 85),
     currency: "EUR",
-    departureTime: `${date}T06:30:00`,
-    arrivalTime: `${date}T10:15:00`,
-    origin, destination, stops: 0, duration: "3h 45m",
-    segments: [{ carrier: airlines[0], origin, destination, departureTime: `${date}T06:30:00`, arrivalTime: `${date}T10:15:00` }],
+    departureTime: `${date}T06:15:00`,
+    arrivalTime: `${date}T09:50:00`,
+    origin, destination, stops: 0, duration: "3h 35m",
+    segments: [{ carrier: airlines[0], origin, destination, departureTime: `${date}T06:15:00`, arrivalTime: `${date}T09:50:00` }],
   });
 
-  // 1-stop via hub
+  // Morning with connection
   flights.push({
     airline: airlines[1],
-    price: 220 + (seed % 130),
+    price: 210 + (seed % 130),
     currency: "EUR",
-    departureTime: `${date}T07:15:00`,
-    arrivalTime: `${date}T13:20:00`,
-    origin, destination, stops: 1, duration: "6h 05m",
+    departureTime: `${date}T08:40:00`,
+    arrivalTime: `${date}T14:25:00`,
+    origin, destination, stops: 1, duration: "5h 45m",
     segments: [
-      { carrier: airlines[1], origin, destination: hub, departureTime: `${date}T07:15:00`, arrivalTime: `${date}T08:45:00` },
-      { carrier: airlines[1], origin: hub, destination, departureTime: `${date}T10:00:00`, arrivalTime: `${date}T13:20:00` },
+      { carrier: airlines[1], origin, destination: hub, departureTime: `${date}T08:40:00`, arrivalTime: `${date}T10:10:00` },
+      { carrier: airlines[1], origin: hub, destination, departureTime: `${date}T11:30:00`, arrivalTime: `${date}T14:25:00` },
     ],
   });
 
-  // Budget direct
+  // Late morning direct
   flights.push({
     airline: airlines[2],
-    price: 120 + (seed % 80),
+    price: 175 + (seed % 100),
     currency: "EUR",
-    departureTime: `${date}T05:50:00`,
-    arrivalTime: `${date}T09:30:00`,
+    departureTime: `${date}T11:20:00`,
+    arrivalTime: `${date}T15:00:00`,
     origin, destination, stops: 0, duration: "3h 40m",
-    segments: [{ carrier: airlines[2], origin, destination, departureTime: `${date}T05:50:00`, arrivalTime: `${date}T09:30:00` }],
+    segments: [{ carrier: airlines[2], origin, destination, departureTime: `${date}T11:20:00`, arrivalTime: `${date}T15:00:00` }],
   });
 
-  // Afternoon option
+  // Afternoon direct
   flights.push({
     airline: airlines[3],
-    price: 260 + (seed % 100),
+    price: 255 + (seed % 95),
     currency: "EUR",
-    departureTime: `${date}T14:00:00`,
-    arrivalTime: `${date}T17:45:00`,
-    origin, destination, stops: 0, duration: "3h 45m",
-    segments: [{ carrier: airlines[3], origin, destination, departureTime: `${date}T14:00:00`, arrivalTime: `${date}T17:45:00` }],
+    departureTime: `${date}T15:50:00`,
+    arrivalTime: `${date}T19:30:00`,
+    origin, destination, stops: 0, duration: "3h 40m",
+    segments: [{ carrier: airlines[3], origin, destination, departureTime: `${date}T15:50:00`, arrivalTime: `${date}T19:30:00` }],
   });
 
   flights.sort((a, b) => a.price - b.price);

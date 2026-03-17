@@ -17,8 +17,14 @@ function getValidDate(dateStr: string): string {
 
 export async function searchFlights(analysis: EmailAnalysis): Promise<FlightResult[]> {
   try {
+    if (!analysis.originIATA || analysis.originIATA.length !== 3 ||
+        !analysis.destinationIATA || analysis.destinationIATA.length !== 3) {
+      console.error(`Invalid IATA codes: origin="${analysis.originIATA}", dest="${analysis.destinationIATA}"`);
+      return [];
+    }
+
     const departureDate = getValidDate(analysis.dates.start);
-    console.log(`Flight search: ${analysis.originIATA} → ${analysis.destinationIATA} on ${departureDate}`);
+    console.log(`[FlightAgent] Searching: ${analysis.originIATA} → ${analysis.destinationIATA} on ${departureDate}`);
 
     const offers = await duffelSearch(
       analysis.originIATA,
