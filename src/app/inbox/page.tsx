@@ -386,8 +386,9 @@ export default function InboxPage() {
   const selectedFlight = flights[selectedFlightIdx];
   const selectedHotel = hotels[selectedHotelIdx];
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const hotelLocs = hotels.map((h: any, i: number) => (h.lat && h.lng ? { lat: h.lat, lng: h.lng, label: h.name, idx: i } : null)).filter(Boolean);
+  const hotelLocs = hotels
+    .map((h, i) => (h.lat != null && h.lng != null ? { lat: h.lat, lng: h.lng, label: h.name, idx: i } : null))
+    .filter((x): x is NonNullable<typeof x> => x !== null);
 
   /* ================================================================ */
 
@@ -610,11 +611,9 @@ export default function InboxPage() {
             {places.length > 0 && (
               <div className="mt-4">
                 <MapView
-                  locations={places.filter(p => 'lat' in p && 'lng' in p).map(p => {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const pa = p as any;
-                    return { lat: pa.lat, lng: pa.lng, label: p.name, color: '#A78BFA' };
-                  })}
+                  locations={places.filter(p => p.lat != null && p.lng != null).map(p => ({
+                    lat: p.lat!, lng: p.lng!, label: p.name, color: '#A78BFA',
+                  }))}
                   height={280}
                 />
               </div>

@@ -57,6 +57,8 @@ export interface PlaceResult {
   address: string;
   summary: string;
   mapsUrl: string;
+  lat?: number;
+  lng?: number;
 }
 
 export interface AllAgentResults {

@@ -1,12 +1,29 @@
 import { searchFlights as duffelSearch } from "@/lib/duffel";
 import { EmailAnalysis, FlightResult } from "./types";
 
+function getValidDate(dateStr: string): string {
+  // Validate YYYY-MM-DD format
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return dateStr;
+  }
+  // Fallback: tomorrow's date
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const fallback = tomorrow.toISOString().split("T")[0];
+  console.warn(`Invalid departure date "${dateStr}" — using ${fallback}`);
+  return fallback;
+}
+
 export async function searchFlights(analysis: EmailAnalysis): Promise<FlightResult[]> {
   try {
+    const departureDate = getValidDate(analysis.dates.start);
+    console.log(`Flight search: ${analysis.originIATA} → ${analysis.destinationIATA} on ${departureDate}`);
+
     const offers = await duffelSearch(
       analysis.originIATA,
       analysis.destinationIATA,
-      analysis.dates.start,
+      departureDate,
       analysis.travelers.adults
     );
 
