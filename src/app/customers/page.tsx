@@ -34,12 +34,12 @@ const AVAILABLE_TAGS = [
 ] as const;
 
 const TAG_COLORS: Record<string, { bg: string; text: string }> = {
-  VIP: { bg: 'bg-teal/15', text: 'text-teal' },
-  'Group travel': { bg: 'bg-purple/15', text: 'text-purple' },
-  Budget: { bg: 'bg-amber/15', text: 'text-amber' },
-  Luxury: { bg: 'bg-pink/15', text: 'text-pink' },
-  Business: { bg: 'bg-cyan/15', text: 'text-cyan' },
-  'Repeat customer': { bg: 'bg-green/15', text: 'text-green' },
+  VIP: { bg: 'var(--color-primary-light)', text: 'var(--color-primary)' },
+  'Group travel': { bg: 'var(--color-purple-light)', text: 'var(--color-purple)' },
+  Budget: { bg: 'var(--color-amber-light)', text: 'var(--color-amber)' },
+  Luxury: { bg: 'color-mix(in srgb, var(--color-pink) 10%, transparent)', text: 'var(--color-pink)' },
+  Business: { bg: 'var(--color-primary-light)', text: 'var(--color-primary)' },
+  'Repeat customer': { bg: 'var(--color-green-light)', text: 'var(--color-green)' },
 };
 
 /* ================================================================
@@ -143,23 +143,34 @@ function CustomerCard({
 
   const availableTags = AVAILABLE_TAGS.filter((t) => !customer.tags.includes(t));
 
+  const inputStyle: React.CSSProperties = {
+    background: 'var(--color-surface)',
+    borderColor: 'var(--color-border)',
+    color: 'var(--color-text)',
+  };
+
   return (
-    <div className="glass-card p-5 transition-colors duration-150 hover:bg-white/[0.01]">
+    <div className="glass-card p-5 transition-colors duration-150">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        {/* Left — Info */}
+        {/* Left -- Info */}
         <div className="flex-1 min-w-0">
           {/* Name + email */}
-          <p className="text-sm font-semibold text-foreground/85">{customer.name}</p>
-          <p className="mt-0.5 text-xs text-foreground/35">{customer.email}</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+            {customer.name}
+          </p>
+          <p className="mt-0.5 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            {customer.email}
+          </p>
 
           {/* Tags */}
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             {customer.tags.map((tag) => {
-              const colors = TAG_COLORS[tag] || { bg: 'bg-foreground/10', text: 'text-foreground/50' };
+              const colors = TAG_COLORS[tag] || { bg: 'var(--color-bg-secondary)', text: 'var(--color-text-secondary)' };
               return (
                 <span
                   key={tag}
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${colors.bg} ${colors.text}`}
+                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium"
+                  style={{ background: colors.bg, color: colors.text }}
                 >
                   {tag}
                   <button
@@ -177,21 +188,26 @@ function CustomerCard({
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setShowTagDropdown(!showTagDropdown)}
-                  className="inline-flex items-center gap-1 rounded-full border border-dashed border-foreground/10 px-2 py-0.5 text-[11px] text-foreground/30 hover:text-foreground/50 hover:border-foreground/20 transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 rounded-full border border-dashed px-2 py-0.5 text-[11px] transition-colors cursor-pointer"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
                 >
                   <Plus size={10} />
                   Tag
                 </button>
 
                 {showTagDropdown && (
-                  <div className="absolute left-0 top-full mt-1 z-20 min-w-[160px] rounded-lg border border-card-border bg-navy-deep shadow-xl animate-fade-in">
+                  <div
+                    className="absolute left-0 top-full mt-1 z-20 min-w-[160px] rounded-lg shadow-xl animate-fade-in"
+                    style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
+                  >
                     {availableTags.map((tag) => {
-                      const colors = TAG_COLORS[tag] || { bg: '', text: 'text-foreground/60' };
+                      const colors = TAG_COLORS[tag] || { bg: '', text: 'var(--color-text-secondary)' };
                       return (
                         <button
                           key={tag}
                           onClick={() => addTag(tag)}
-                          className={`flex w-full items-center gap-2 px-3 py-2 text-xs ${colors.text} hover:bg-white/[0.04] transition-colors cursor-pointer first:rounded-t-lg last:rounded-b-lg`}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors cursor-pointer first:rounded-t-lg last:rounded-b-lg"
+                          style={{ color: colors.text }}
                         >
                           <Tag size={11} />
                           {tag}
@@ -205,21 +221,22 @@ function CustomerCard({
           </div>
 
           {/* Meta row */}
-          <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-foreground/40">
+          <div className="mt-3 flex flex-wrap items-center gap-4 text-xs" style={{ color: 'var(--color-text-muted)' }}>
             <span>{tripSummary}</span>
             <span className="inline-flex items-center gap-1">
-              <Globe size={11} className="text-foreground/25" />
+              <Globe size={11} style={{ color: 'var(--color-text-muted)' }} />
               {langLabel(customer.preferredLanguage)}
             </span>
             <span>Last contact: {relativeDate(customer.lastContact)}</span>
           </div>
         </div>
 
-        {/* Right — Actions */}
+        {/* Right -- Actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
             onClick={() => setExpanded(!expanded)}
-            className="inline-flex items-center gap-1 rounded-lg bg-foreground/[0.04] px-3 py-1.5 text-xs text-foreground/40 hover:bg-foreground/[0.07] hover:text-foreground/55 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs transition-colors cursor-pointer"
+            style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-muted)' }}
           >
             {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
             Notes
@@ -228,11 +245,12 @@ function CustomerCard({
           <button
             onClick={handleDelete}
             onBlur={() => setConfirmDelete(false)}
-            className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+            className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer"
+            style={
               confirmDelete
-                ? 'bg-red-500/15 text-red-400'
-                : 'bg-foreground/[0.04] text-foreground/30 hover:bg-red-500/10 hover:text-red-400'
-            }`}
+                ? { background: 'var(--color-red-light)', color: 'var(--color-red)' }
+                : { background: 'var(--color-bg-secondary)', color: 'var(--color-text-muted)' }
+            }
           >
             <Trash2 size={13} />
             {confirmDelete ? 'Confirm?' : 'Delete'}
@@ -243,7 +261,7 @@ function CustomerCard({
       {/* Expanded: Notes */}
       {expanded && (
         <div className="mt-4 animate-fade-in">
-          <label className="mb-1.5 block text-xs font-medium text-foreground/40">
+          <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
             Notes
           </label>
           <textarea
@@ -253,7 +271,8 @@ function CustomerCard({
             onBlur={saveNotes}
             rows={3}
             placeholder="Add notes about this customer..."
-            className="w-full rounded-lg border border-card-border bg-navy-deep/50 px-4 py-2.5 text-sm text-foreground/80 outline-none focus:border-teal/50 focus:ring-1 focus:ring-teal/20 resize-none"
+            className="w-full rounded-lg border px-4 py-2.5 text-sm outline-none transition-colors resize-none"
+            style={inputStyle}
           />
         </div>
       )}
@@ -277,7 +296,7 @@ export default function CustomersPage() {
     reload();
   }, [reload]);
 
-  /* ── Mutators ────────────────────────────────────────────── */
+  /* -- Mutators ----------------------------------------------- */
 
   const handleUpdate = (email: string, patch: Partial<KnownCustomer>) => {
     const updated = customers.map((c) =>
@@ -295,35 +314,43 @@ export default function CustomersPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10 animate-fade-in">
-      {/* ── Header ─────────────────────────────────────────── */}
+      {/* -- Header --------------------------------------------- */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-1">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple/10">
-            <Users size={18} className="text-purple" />
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-lg"
+            style={{ background: 'var(--color-purple-light)' }}
+          >
+            <Users size={18} style={{ color: 'var(--color-purple)' }} />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Customers</h1>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>
+            Customers
+          </h1>
         </div>
-        <p className="text-sm text-foreground/40 ml-12">
+        <p className="text-sm ml-12" style={{ color: 'var(--color-text-muted)' }}>
           {customers.length} customer{customers.length !== 1 ? 's' : ''} in your database
         </p>
       </div>
 
-      {/* ── Empty State ────────────────────────────────────── */}
+      {/* -- Empty State ---------------------------------------- */}
       {customers.length === 0 && (
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-foreground/[0.03] mb-4">
-            <Inbox size={32} className="text-foreground/15" />
+          <div
+            className="flex h-16 w-16 items-center justify-center rounded-2xl mb-4"
+            style={{ background: 'var(--color-bg-secondary)' }}
+          >
+            <Inbox size={32} style={{ color: 'var(--color-text-muted)' }} />
           </div>
-          <p className="text-sm font-medium text-foreground/30">
+          <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>
             No customers yet
           </p>
-          <p className="mt-1 text-xs text-foreground/20 max-w-xs">
+          <p className="mt-1 text-xs max-w-xs" style={{ color: 'var(--color-text-muted)', opacity: 0.7 }}>
             Process your first email to start building your customer database.
           </p>
         </div>
       )}
 
-      {/* ── Customer List ──────────────────────────────────── */}
+      {/* -- Customer List -------------------------------------- */}
       {customers.length > 0 && (
         <div className="space-y-3">
           {customers.map((customer, i) => (
@@ -343,10 +370,17 @@ export default function CustomersPage() {
 
       {/* Footer count */}
       {customers.length > 0 && (
-        <p className="mt-4 text-center text-xs text-foreground/20">
+        <p className="mt-4 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
           Showing {customers.length} customer{customers.length !== 1 ? 's' : ''}
         </p>
       )}
+
+      {/* Footer */}
+      <div className="mt-8 text-center">
+        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          &copy; 2026 Revival SA — AI &amp; Business Intelligence
+        </p>
+      </div>
     </div>
   );
 }

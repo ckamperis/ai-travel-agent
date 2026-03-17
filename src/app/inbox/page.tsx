@@ -20,6 +20,7 @@ import {
 import { stripMarkdown } from '@/lib/markdown-strip';
 import { emailToHtml } from '@/lib/email-to-html';
 import { getWeather, type WeatherDay } from '@/lib/weather';
+import MapView from '@/components/MapView';
 
 /* ================================================================ */
 
@@ -86,11 +87,12 @@ function extractEmail(text: string): string {
   return m ? m[0] : '';
 }
 const WEATHER_ICONS: Record<string, string> = { 'sunny': '☀️', 'partly-cloudy': '⛅', 'cloudy': '☁️', 'rainy': '🌧️', 'stormy': '⛈️' };
-const INPUT_CLS = 'w-full rounded-lg border border-card-border bg-navy-deep/50 px-4 py-2.5 text-sm text-foreground/80 outline-none focus:border-teal/50 focus:ring-1 focus:ring-teal/20';
+const INPUT_CLS = 'w-full rounded-lg border px-4 py-2.5 text-sm outline-none transition-colors';
+const INPUT_STYLE: React.CSSProperties = { background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
 
 function LiveBadge({ source }: { source?: 'live' | 'mock' }) {
   if (source !== 'live') return null;
-  return <span className="inline-flex items-center gap-1 rounded bg-green/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-green"><Radio size={8} className="animate-pulse" />Live</span>;
+  return <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider" style={{ background: 'var(--color-green-light)', color: 'var(--color-green)' }}><Radio size={8} className="animate-pulse" />Live</span>;
 }
 
 /* ================================================================ */
@@ -384,6 +386,9 @@ export default function InboxPage() {
   const selectedFlight = flights[selectedFlightIdx];
   const selectedHotel = hotels[selectedHotelIdx];
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const hotelLocs = hotels.map((h: any, i: number) => (h.lat && h.lng ? { lat: h.lat, lng: h.lng, label: h.name, idx: i } : null)).filter(Boolean);
+
   /* ================================================================ */
 
   return (
@@ -393,33 +398,34 @@ export default function InboxPage() {
       {/* ===== STEP 1 ===== */}
       {step === 1 && (
         <div className="animate-fade-in">
-          <h1 className="text-2xl font-bold text-foreground mb-1">Inbox</h1>
-          <p className="text-sm text-foreground/40 mb-8">Select a customer email or paste your own</p>
+          <h1 className="text-2xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>Inbox</h1>
+          <p className="text-sm mb-8" style={{ color: 'var(--color-text-secondary)' }}>Select a customer email or paste your own</p>
           <div className="space-y-2 mb-6">
             {SAMPLE_EMAILS.map(email => (
               <button key={email.id} onClick={() => analyzeEmail(email.body)}
-                className="w-full glass-card flex items-center gap-4 px-5 py-4 text-left transition-all hover:border-teal/30 cursor-pointer group">
-                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-teal/10 text-teal"><Mail size={18} /></div>
+                className="w-full glass-card flex items-center gap-4 px-5 py-4 text-left transition-all cursor-pointer group"
+                style={{ borderColor: 'var(--color-border)' }}>
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full" style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}><Mail size={18} /></div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground">{email.from}</span>
-                    <span className="text-xs text-foreground/25">{email.date}</span>
+                    <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{email.from}</span>
+                    <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{email.date}</span>
                   </div>
-                  <p className="text-sm font-medium text-foreground/60 mt-0.5">{email.subject}</p>
-                  <p className="text-xs text-foreground/30 mt-0.5 truncate">{email.preview}</p>
+                  <p className="text-sm font-medium mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>{email.subject}</p>
+                  <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-text-muted)' }}>{email.preview}</p>
                 </div>
-                <ArrowRight size={16} className="text-foreground/15 group-hover:text-teal transition-colors" />
+                <ArrowRight size={16} style={{ color: 'var(--color-text-muted)' }} />
               </button>
             ))}
           </div>
           {!showPaste ? (
-            <button onClick={() => setShowPaste(true)} className="w-full rounded-lg border border-dashed border-card-border py-4 text-sm text-foreground/30 hover:border-teal/30 hover:text-foreground/50 transition-colors cursor-pointer">+ Paste a custom email</button>
+            <button onClick={() => setShowPaste(true)} className="w-full rounded-lg border border-dashed py-4 text-sm transition-colors cursor-pointer" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>+ Paste a custom email</button>
           ) : (
             <div className="space-y-3 animate-fade-in">
-              <textarea value={emailText} onChange={e => setEmailText(e.target.value)} className={`${INPUT_CLS} min-h-[200px] resize-none`} placeholder="Paste a customer email here..." autoFocus />
+              <textarea value={emailText} onChange={e => setEmailText(e.target.value)} className={`${INPUT_CLS} min-h-[200px] resize-none`} style={INPUT_STYLE} placeholder="Paste a customer email here..." autoFocus />
               <div className="flex gap-3">
-                <button onClick={() => analyzeEmail(emailText)} disabled={!emailText.trim()} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-teal to-cyan px-6 py-2.5 text-sm font-semibold text-navy-deep transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:pointer-events-none"><Send size={15} /> Process</button>
-                <button onClick={() => { setShowPaste(false); setEmailText(''); }} className="text-sm text-foreground/35 hover:text-foreground/60 cursor-pointer">Cancel</button>
+                <button onClick={() => analyzeEmail(emailText)} disabled={!emailText.trim()} className="inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-semibold transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:pointer-events-none" style={{ background: 'var(--color-primary)', color: '#fff' }}><Send size={15} /> Process</button>
+                <button onClick={() => { setShowPaste(false); setEmailText(''); }} className="text-sm cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>Cancel</button>
               </div>
             </div>
           )}
@@ -429,21 +435,21 @@ export default function InboxPage() {
       {/* ===== STEP 2 ===== */}
       {step === 2 && (
         <div className="animate-fade-in">
-          <h1 className="text-2xl font-bold text-foreground mb-1">Email Analysis</h1>
-          <p className="text-sm text-foreground/40 mb-6">Review and edit the extracted information before searching
+          <h1 className="text-2xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>Email Analysis</h1>
+          <p className="text-sm mb-6" style={{ color: 'var(--color-text-secondary)' }}>Review and edit the extracted information before searching
             {analysisSource === 'live' && <> <LiveBadge source="live" /></>}
-            {analysisTime > 0 && <span className="ml-2 text-foreground/25"><Clock size={11} className="inline" /> {fmtTime(analysisTime)}</span>}
+            {analysisTime > 0 && <span className="ml-2" style={{ color: 'var(--color-text-muted)' }}><Clock size={11} className="inline" /> {fmtTime(analysisTime)}</span>}
           </p>
 
           {/* Customer recognition banner */}
           {knownCustomer && (
-            <div className="glass-card px-5 py-3 mb-6 border-teal/20 animate-fade-in">
+            <div className="glass-card px-5 py-3 mb-6 animate-fade-in" style={{ borderColor: 'var(--color-border)' }}>
               <div className="flex items-center gap-2 text-sm">
-                <RefreshCw size={14} className="text-teal" />
-                <span className="font-medium text-teal">Returning Customer</span>
-                <span className="text-foreground/60">— {knownCustomer.name}</span>
+                <RefreshCw size={14} style={{ color: 'var(--color-primary)' }} />
+                <span className="font-medium" style={{ color: 'var(--color-primary)' }}>Returning Customer</span>
+                <span style={{ color: 'var(--color-text-secondary)' }}>— {knownCustomer.name}</span>
               </div>
-              <p className="text-xs text-foreground/40 mt-1">
+              <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
                 {knownCustomer.trips.length} previous trip{knownCustomer.trips.length !== 1 ? 's' : ''}
                 {knownCustomer.trips.length > 0 && <> — Last: {knownCustomer.trips[knownCustomer.trips.length - 1].destination}</>}
                 {knownCustomer.preferredLanguage && <> — Language: {LANGUAGES.find(l => l.value === knownCustomer.preferredLanguage)?.label || knownCustomer.preferredLanguage}</>}
@@ -453,37 +459,37 @@ export default function InboxPage() {
 
           {analysisLoading && (
             <div className="flex flex-col items-center justify-center py-20 gap-4">
-              <Loader2 size={32} className="animate-spin text-teal" />
-              <p className="text-sm text-foreground/40">Analyzing email...</p>
+              <Loader2 size={32} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
+              <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Analyzing email...</p>
             </div>
           )}
 
           {edited && !analysisLoading && (
             <div className="space-y-6 max-w-3xl">
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-xs font-medium text-foreground/40 mb-1.5">Origin</label><div className="flex gap-2"><input value={edited.origin} onChange={e => setEdited({ ...edited, origin: e.target.value })} className={INPUT_CLS} /><input value={edited.originIATA} onChange={e => setEdited({ ...edited, originIATA: e.target.value.toUpperCase() })} className={`${INPUT_CLS} w-20 text-center uppercase`} placeholder="IATA" /></div></div>
-                <div><label className="block text-xs font-medium text-foreground/40 mb-1.5">Destination</label><div className="flex gap-2"><input value={edited.destination} onChange={e => setEdited({ ...edited, destination: e.target.value })} className={INPUT_CLS} /><input value={edited.destinationIATA} onChange={e => setEdited({ ...edited, destinationIATA: e.target.value.toUpperCase() })} className={`${INPUT_CLS} w-20 text-center uppercase`} placeholder="IATA" /></div></div>
+                <div><label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Origin</label><div className="flex gap-2"><input value={edited.origin} onChange={e => setEdited({ ...edited, origin: e.target.value })} className={INPUT_CLS} style={INPUT_STYLE} /><input value={edited.originIATA} onChange={e => setEdited({ ...edited, originIATA: e.target.value.toUpperCase() })} className={`${INPUT_CLS} w-20 text-center uppercase`} style={INPUT_STYLE} placeholder="IATA" /></div></div>
+                <div><label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Destination</label><div className="flex gap-2"><input value={edited.destination} onChange={e => setEdited({ ...edited, destination: e.target.value })} className={INPUT_CLS} style={INPUT_STYLE} /><input value={edited.destinationIATA} onChange={e => setEdited({ ...edited, destinationIATA: e.target.value.toUpperCase() })} className={`${INPUT_CLS} w-20 text-center uppercase`} style={INPUT_STYLE} placeholder="IATA" /></div></div>
               </div>
               <div className="grid grid-cols-3 gap-4">
-                <div><label className="block text-xs font-medium text-foreground/40 mb-1.5">Start Date</label><input type="date" value={edited.startDate} onChange={e => setEdited({ ...edited, startDate: e.target.value })} className={INPUT_CLS} /></div>
-                <div><label className="block text-xs font-medium text-foreground/40 mb-1.5">End Date</label><input type="date" value={edited.endDate} onChange={e => setEdited({ ...edited, endDate: e.target.value })} className={INPUT_CLS} /></div>
-                <div><label className="block text-xs font-medium text-foreground/40 mb-1.5">Duration</label><input type="number" value={edited.duration} onChange={e => setEdited({ ...edited, duration: parseInt(e.target.value) || 1 })} className={INPUT_CLS} min={1} /></div>
+                <div><label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Start Date</label><input type="date" value={edited.startDate} onChange={e => setEdited({ ...edited, startDate: e.target.value })} className={INPUT_CLS} style={INPUT_STYLE} /></div>
+                <div><label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>End Date</label><input type="date" value={edited.endDate} onChange={e => setEdited({ ...edited, endDate: e.target.value })} className={INPUT_CLS} style={INPUT_STYLE} /></div>
+                <div><label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Duration</label><input type="number" value={edited.duration} onChange={e => setEdited({ ...edited, duration: parseInt(e.target.value) || 1 })} className={INPUT_CLS} style={INPUT_STYLE} min={1} /></div>
               </div>
               <div className="grid grid-cols-4 gap-4">
-                <div><label className="block text-xs font-medium text-foreground/40 mb-1.5">Adults</label><input type="number" value={edited.adults} onChange={e => setEdited({ ...edited, adults: parseInt(e.target.value) || 1 })} className={INPUT_CLS} min={1} /></div>
-                <div><label className="block text-xs font-medium text-foreground/40 mb-1.5">Children</label><input type="number" value={edited.children} onChange={e => setEdited({ ...edited, children: parseInt(e.target.value) || 0 })} className={INPUT_CLS} min={0} /></div>
-                <div><label className="block text-xs font-medium text-foreground/40 mb-1.5">Budget Min (€/night)</label><input type="number" value={edited.budgetMin} onChange={e => setEdited({ ...edited, budgetMin: parseInt(e.target.value) || 0 })} className={INPUT_CLS} min={0} /></div>
-                <div><label className="block text-xs font-medium text-foreground/40 mb-1.5">Budget Max (€/night)</label><input type="number" value={edited.budgetMax} onChange={e => setEdited({ ...edited, budgetMax: parseInt(e.target.value) || 0 })} className={INPUT_CLS} min={0} /></div>
+                <div><label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Adults</label><input type="number" value={edited.adults} onChange={e => setEdited({ ...edited, adults: parseInt(e.target.value) || 1 })} className={INPUT_CLS} style={INPUT_STYLE} min={1} /></div>
+                <div><label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Children</label><input type="number" value={edited.children} onChange={e => setEdited({ ...edited, children: parseInt(e.target.value) || 0 })} className={INPUT_CLS} style={INPUT_STYLE} min={0} /></div>
+                <div><label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Budget Min (€/night)</label><input type="number" value={edited.budgetMin} onChange={e => setEdited({ ...edited, budgetMin: parseInt(e.target.value) || 0 })} className={INPUT_CLS} style={INPUT_STYLE} min={0} /></div>
+                <div><label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Budget Max (€/night)</label><input type="number" value={edited.budgetMax} onChange={e => setEdited({ ...edited, budgetMax: parseInt(e.target.value) || 0 })} className={INPUT_CLS} style={INPUT_STYLE} min={0} /></div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-foreground/40 mb-1.5">Interests</label>
-                <div className="flex flex-wrap gap-2 mb-2">{edited.interests.map((tag, i) => (<span key={i} className="flex items-center gap-1.5 rounded-full bg-teal/10 px-3 py-1 text-xs text-teal/80">{tag}<button onClick={() => setEdited({ ...edited, interests: edited.interests.filter((_, j) => j !== i) })} className="text-teal/40 hover:text-teal cursor-pointer"><X size={12} /></button></span>))}</div>
-                <div className="flex gap-2"><input value={newInterest} onChange={e => setNewInterest(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && newInterest.trim()) { setEdited({ ...edited, interests: [...edited.interests, newInterest.trim()] }); setNewInterest(''); } }} className={`${INPUT_CLS} max-w-[200px]`} placeholder="Add interest..." /><button onClick={() => { if (newInterest.trim()) { setEdited({ ...edited, interests: [...edited.interests, newInterest.trim()] }); setNewInterest(''); } }} className="rounded-lg bg-teal/10 px-3 py-2 text-teal hover:bg-teal/20 cursor-pointer transition-colors"><Plus size={16} /></button></div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Interests</label>
+                <div className="flex flex-wrap gap-2 mb-2">{edited.interests.map((tag, i) => (<span key={i} className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs" style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>{tag}<button onClick={() => setEdited({ ...edited, interests: edited.interests.filter((_, j) => j !== i) })} className="cursor-pointer" style={{ color: 'var(--color-primary)' }}><X size={12} /></button></span>))}</div>
+                <div className="flex gap-2"><input value={newInterest} onChange={e => setNewInterest(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && newInterest.trim()) { setEdited({ ...edited, interests: [...edited.interests, newInterest.trim()] }); setNewInterest(''); } }} className={`${INPUT_CLS} max-w-[200px]`} style={INPUT_STYLE} placeholder="Add interest..." /><button onClick={() => { if (newInterest.trim()) { setEdited({ ...edited, interests: [...edited.interests, newInterest.trim()] }); setNewInterest(''); } }} className="rounded-lg px-3 py-2 cursor-pointer transition-colors" style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}><Plus size={16} /></button></div>
               </div>
-              <div className="max-w-[200px]"><label className="block text-xs font-medium text-foreground/40 mb-1.5">Detected Language</label><select value={edited.language} onChange={e => setEdited({ ...edited, language: e.target.value })} className={INPUT_CLS}>{LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}</select></div>
-              <div className="flex gap-3 pt-4 border-t border-card-border/30">
-                <button onClick={() => setStep(1)} className="inline-flex items-center gap-2 rounded-lg bg-card border border-card-border px-5 py-2.5 text-sm font-medium text-foreground/60 hover:border-foreground/20 cursor-pointer transition-all"><ArrowLeft size={15} /> Back</button>
-                <button onClick={confirmAndSearch} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-teal to-cyan px-6 py-2.5 text-sm font-semibold text-navy-deep transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer"><Search size={15} /> Confirm &amp; Search</button>
+              <div className="max-w-[200px]"><label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Detected Language</label><select value={edited.language} onChange={e => setEdited({ ...edited, language: e.target.value })} className={INPUT_CLS} style={INPUT_STYLE}>{LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}</select></div>
+              <div className="flex gap-3 pt-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                <button onClick={() => setStep(1)} className="inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-medium cursor-pointer transition-all" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}><ArrowLeft size={15} /> Back</button>
+                <button onClick={confirmAndSearch} className="inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-semibold transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer" style={{ background: 'var(--color-primary)', color: '#fff' }}><Search size={15} /> Confirm &amp; Search</button>
               </div>
             </div>
           )}
@@ -493,26 +499,26 @@ export default function InboxPage() {
       {/* ===== STEP 3 ===== */}
       {step === 3 && (
         <div className="animate-fade-in">
-          <h1 className="text-2xl font-bold text-foreground mb-1">Search Results</h1>
-          <p className="text-sm text-foreground/40 mb-4">{analysis?.origin} → {analysis?.destination} · {analysis?.dates.duration} days · {analysis?.travelers.adults} adults</p>
+          <h1 className="text-2xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>Search Results</h1>
+          <p className="text-sm mb-4" style={{ color: 'var(--color-text-secondary)' }}>{analysis?.origin} → {analysis?.destination} · {analysis?.dates.duration} days · {analysis?.travelers.adults} adults</p>
 
           {/* Weather widget */}
           {weather.length > 0 && (
             <div className="glass-card px-5 py-3 mb-6 flex items-center gap-4 overflow-x-auto">
-              <CloudSun size={16} className="text-amber flex-shrink-0" />
-              <span className="text-xs text-foreground/40 flex-shrink-0">Weather:</span>
+              <CloudSun size={16} className="flex-shrink-0" style={{ color: 'var(--color-amber)' }} />
+              <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-text-secondary)' }}>Weather:</span>
               {weather.slice(0, 5).map((w, i) => (
                 <div key={i} className="flex flex-col items-center gap-0.5 flex-shrink-0 min-w-[50px]">
-                  <span className="text-[10px] text-foreground/25">{new Date(w.date).toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                  <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>{new Date(w.date).toLocaleDateString('en-US', { weekday: 'short' })}</span>
                   <span className="text-base">{WEATHER_ICONS[w.condition] || '🌤️'}</span>
-                  <span className="text-[10px] text-foreground/40">{w.high}°/{w.low}°</span>
+                  <span className="text-[10px]" style={{ color: 'var(--color-text-secondary)' }}>{w.high}°/{w.low}°</span>
                 </div>
               ))}
             </div>
           )}
 
           {/* Tabs */}
-          <div className="flex gap-1 border-b border-card-border/30 mb-6 overflow-x-auto">
+          <div className="flex gap-1 border-b mb-6 overflow-x-auto" style={{ borderColor: 'var(--color-border)' }}>
             {([
               { key: 'flights' as const, label: 'Flights', icon: Plane, color: '#22D3EE', count: flights.length },
               { key: 'hotels' as const, label: 'Hotels', icon: Building2, color: '#F59E0B', count: hotels.length },
@@ -523,13 +529,13 @@ export default function InboxPage() {
               const agentKey = tab.key === 'itinerary' ? 'research' : tab.key === 'compare' ? '' : tab.key;
               return (
                 <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer -mb-px whitespace-nowrap ${activeTab === tab.key ? 'border-current' : 'border-transparent text-foreground/35 hover:text-foreground/55'}`}
-                  style={{ color: activeTab === tab.key ? tab.color : undefined }}>
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer -mb-px whitespace-nowrap ${activeTab === tab.key ? 'border-current' : 'border-transparent'}`}
+                  style={{ color: activeTab === tab.key ? tab.color : 'var(--color-text-muted)' }}>
                   <tab.icon size={15} />{tab.label}
                   {agentKey && agentStatuses[agentKey] === 'active' && <Loader2 size={12} className="animate-spin" />}
-                  {agentKey && agentStatuses[agentKey] === 'done' && tab.count != null && <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10px]">{tab.count}</span>}
+                  {agentKey && agentStatuses[agentKey] === 'done' && tab.count != null && <span className="rounded-full px-2 py-0.5 text-[10px]" style={{ background: 'var(--color-primary-light)' }}>{tab.count}</span>}
                   {agentKey && <LiveBadge source={agentSources[agentKey]} />}
-                  {agentKey && agentTimes[agentKey] != null && <span className="text-[10px] text-foreground/20">{fmtTime(agentTimes[agentKey])}</span>}
+                  {agentKey && agentTimes[agentKey] != null && <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>{fmtTime(agentTimes[agentKey])}</span>}
                 </button>
               );
             })}
@@ -537,66 +543,88 @@ export default function InboxPage() {
 
           {/* FLIGHTS */}
           {activeTab === 'flights' && (<div>
-            {agentStatuses.flight === 'active' && <div className="flex items-center gap-3 py-12 justify-center text-foreground/30"><Loader2 size={20} className="animate-spin text-cyan" /> Searching flights...</div>}
+            {agentStatuses.flight === 'active' && <div className="flex items-center gap-3 py-12 justify-center" style={{ color: 'var(--color-text-muted)' }}><Loader2 size={20} className="animate-spin" style={{ color: 'var(--color-primary)' }} /> Searching flights...</div>}
             {flights.length > 0 && (<div>
-              <div className="flex gap-2 mb-3"><span className="text-xs text-foreground/30">Sort:</span>{(['price', 'duration', 'stops'] as const).map(s => (<button key={s} onClick={() => setFlightSort(s)} className={`text-xs cursor-pointer transition-colors ${flightSort === s ? 'text-cyan font-medium' : 'text-foreground/30 hover:text-foreground/50'}`}>{s.charAt(0).toUpperCase() + s.slice(1)}</button>))}</div>
-              <div className="glass-card overflow-hidden"><table className="w-full text-sm"><thead><tr className="border-b border-card-border text-left text-[11px] uppercase tracking-wider text-foreground/25"><th className="w-10 px-4 py-2.5" /><th className="px-4 py-2.5 font-medium">Airline</th><th className="px-4 py-2.5 font-medium">Departure</th><th className="px-4 py-2.5 font-medium">Arrival</th><th className="px-4 py-2.5 font-medium">Stops</th><th className="px-4 py-2.5 font-medium">Duration</th><th className="px-4 py-2.5 font-medium text-right">Price</th></tr></thead>
+              <div className="flex gap-2 mb-3"><span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Sort:</span>{(['price', 'duration', 'stops'] as const).map(s => (<button key={s} onClick={() => setFlightSort(s)} className="text-xs cursor-pointer transition-colors" style={{ color: flightSort === s ? 'var(--color-primary)' : 'var(--color-text-muted)', fontWeight: flightSort === s ? 500 : 400 }}>{s.charAt(0).toUpperCase() + s.slice(1)}</button>))}</div>
+              <div className="glass-card overflow-hidden"><table className="w-full text-sm"><thead><tr className="border-b text-left text-[11px] uppercase tracking-wider" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}><th className="w-10 px-4 py-2.5" /><th className="px-4 py-2.5 font-medium">Airline</th><th className="px-4 py-2.5 font-medium">Departure</th><th className="px-4 py-2.5 font-medium">Arrival</th><th className="px-4 py-2.5 font-medium">Stops</th><th className="px-4 py-2.5 font-medium">Duration</th><th className="px-4 py-2.5 font-medium text-right">Price</th></tr></thead>
               <tbody>{sortedFlights.map((f, i) => { const origIdx = flights.indexOf(f); return (
-                <tr key={i} onClick={() => setSelectedFlightIdx(origIdx)} className={`border-b border-card-border/20 last:border-0 cursor-pointer transition-all hover:bg-white/[0.02] ${origIdx === selectedFlightIdx ? 'bg-cyan/[0.06]' : ''}`}>
-                  <td className="px-4 py-3"><div className={`flex h-5 w-5 items-center justify-center rounded-full border ${origIdx === selectedFlightIdx ? 'border-cyan bg-cyan/20' : 'border-foreground/15'}`}>{origIdx === selectedFlightIdx && <Check size={12} className="text-cyan" />}</div></td>
-                  <td className="px-4 py-3 font-medium text-foreground/80">{f.airline}</td>
-                  <td className="px-4 py-3 tabular-nums text-foreground/60">{fmtClock(f.departureTime)}</td>
-                  <td className="px-4 py-3 tabular-nums text-foreground/60">{fmtClock(f.arrivalTime)}</td>
-                  <td className="px-4 py-3">{f.stops === 0 ? <span className="text-green/80">Direct</span> : `${f.stops} stop${f.stops > 1 ? 's' : ''}`}</td>
-                  <td className="px-4 py-3 text-foreground/40">{f.duration}</td>
-                  <td className={`px-4 py-3 text-right font-semibold tabular-nums ${origIdx === selectedFlightIdx ? 'text-cyan' : 'text-foreground/60'}`}>{f.price}€</td>
+                <tr key={i} onClick={() => setSelectedFlightIdx(origIdx)} className="border-b last:border-0 cursor-pointer transition-all" style={{ borderColor: 'var(--color-border)', background: origIdx === selectedFlightIdx ? 'var(--color-primary-light)' : undefined }}>
+                  <td className="px-4 py-3"><div className="flex h-5 w-5 items-center justify-center rounded-full border" style={{ borderColor: origIdx === selectedFlightIdx ? 'var(--color-primary)' : 'var(--color-border)', background: origIdx === selectedFlightIdx ? 'var(--color-primary-light)' : undefined }}>{origIdx === selectedFlightIdx && <Check size={12} style={{ color: 'var(--color-primary)' }} />}</div></td>
+                  <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text)' }}>{f.airline}</td>
+                  <td className="px-4 py-3 tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>{fmtClock(f.departureTime)}</td>
+                  <td className="px-4 py-3 tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>{fmtClock(f.arrivalTime)}</td>
+                  <td className="px-4 py-3">{f.stops === 0 ? <span style={{ color: 'var(--color-green)' }}>Direct</span> : <span style={{ color: 'var(--color-text-secondary)' }}>{f.stops} stop{f.stops > 1 ? 's' : ''}</span>}</td>
+                  <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>{f.duration}</td>
+                  <td className="px-4 py-3 text-right font-semibold tabular-nums" style={{ color: origIdx === selectedFlightIdx ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>{f.price}€</td>
                 </tr>); })}</tbody></table></div>
             </div>)}
           </div>)}
 
           {/* HOTELS */}
           {activeTab === 'hotels' && (<div>
-            {agentStatuses.hotel === 'active' && <div className="flex items-center gap-3 py-12 justify-center text-foreground/30"><Loader2 size={20} className="animate-spin text-amber" /> Searching hotels...</div>}
+            {agentStatuses.hotel === 'active' && <div className="flex items-center gap-3 py-12 justify-center" style={{ color: 'var(--color-text-muted)' }}><Loader2 size={20} className="animate-spin" style={{ color: 'var(--color-amber)' }} /> Searching hotels...</div>}
             {hotels.length > 0 && (<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{hotels.map((h, i) => (
-              <div key={i} onClick={() => setSelectedHotelIdx(i)} className={`glass-card p-4 cursor-pointer transition-all hover:border-amber/30 ${i === selectedHotelIdx ? 'border-amber/40 bg-amber/[0.04]' : ''}`}>
-                <div className="flex items-start justify-between"><div><div className="flex items-center gap-2">{i === selectedHotelIdx && <CheckCircle size={14} className="text-amber" />}<h4 className="text-sm font-medium text-foreground/90">{h.name}</h4></div><p className="mt-0.5 text-xs text-foreground/40">{h.area}</p></div><div className="flex items-center gap-1 rounded bg-amber/10 px-1.5 py-0.5 text-xs font-semibold text-amber"><Star size={10} className="fill-amber" />{h.rating}</div></div>
-                <div className="mt-2 text-xs text-foreground/30">{h.amenities?.join(' · ')}</div>
-                <div className="mt-3 flex items-center justify-between border-t border-card-border/30 pt-3"><div className="flex items-center gap-1 text-[11px] text-foreground/40"><TrainFront size={11} />{h.metroStation} ({h.metroDistance})</div><div className="text-sm font-semibold text-amber">{h.pricePerNight}€<span className="ml-0.5 text-[10px] font-normal text-foreground/30">/night</span></div></div>
+              <div key={i} onClick={() => setSelectedHotelIdx(i)} className="glass-card p-4 cursor-pointer transition-all" style={{ borderColor: i === selectedHotelIdx ? 'var(--color-amber)' : 'var(--color-border)', background: i === selectedHotelIdx ? 'var(--color-amber-light)' : undefined }}>
+                <div className="flex items-start justify-between"><div><div className="flex items-center gap-2">{i === selectedHotelIdx && <CheckCircle size={14} style={{ color: 'var(--color-amber)' }} />}<h4 className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{h.name}</h4></div><p className="mt-0.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>{h.area}</p></div><div className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-semibold" style={{ background: 'var(--color-amber-light)', color: 'var(--color-amber)' }}><Star size={10} style={{ fill: 'var(--color-amber)' }} />{h.rating}</div></div>
+                <div className="mt-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>{h.amenities?.join(' · ')}</div>
+                <div className="mt-3 flex items-center justify-between border-t pt-3" style={{ borderColor: 'var(--color-border)' }}><div className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--color-text-secondary)' }}><TrainFront size={11} />{h.metroStation} ({h.metroDistance})</div><div className="text-sm font-semibold" style={{ color: 'var(--color-amber)' }}>{h.pricePerNight}€<span className="ml-0.5 text-[10px] font-normal" style={{ color: 'var(--color-text-muted)' }}>/night</span></div></div>
               </div>))}</div>)}
+            {hotels.length > 0 && hotelLocs.length > 0 && (
+              <div className="mt-4">
+                <MapView
+                  locations={hotelLocs.map(h => ({ lat: h!.lat, lng: h!.lng, label: h!.label }))}
+                  selectedIndex={hotelLocs.findIndex(h => h!.idx === selectedHotelIdx)}
+                  onSelect={(i) => { const loc = hotelLocs[i]; if (loc) setSelectedHotelIdx(loc.idx); }}
+                  height={280}
+                />
+              </div>
+            )}
           </div>)}
 
           {/* ITINERARY */}
           {activeTab === 'itinerary' && (<div>
-            {agentStatuses.research === 'active' && <div className="flex items-center gap-3 py-12 justify-center text-foreground/30"><Loader2 size={20} className="animate-spin text-green" /> Generating itinerary...</div>}
+            {agentStatuses.research === 'active' && <div className="flex items-center gap-3 py-12 justify-center" style={{ color: 'var(--color-text-muted)' }}><Loader2 size={20} className="animate-spin" style={{ color: 'var(--color-green)' }} /> Generating itinerary...</div>}
             {research && (<div className="space-y-2">
               {parseResearchDays(research).map((d, i) => (
                 <div key={i} className="glass-card overflow-hidden">
-                  <button onClick={() => setExpandedDays(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; })} className="w-full flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-white/[0.02] transition-colors">
-                    <div className="flex items-center gap-3"><span className="rounded bg-green/10 px-2.5 py-0.5 text-xs font-semibold text-green">{d.day}</span><span className="text-sm text-foreground/70 truncate max-w-[500px]">{d.desc.split('.')[0]}</span></div>
-                    {expandedDays.has(i) ? <ChevronUp size={16} className="text-foreground/25" /> : <ChevronDown size={16} className="text-foreground/25" />}
+                  <button onClick={() => setExpandedDays(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; })} className="w-full flex items-center justify-between px-5 py-3 cursor-pointer transition-colors">
+                    <div className="flex items-center gap-3"><span className="rounded px-2.5 py-0.5 text-xs font-semibold" style={{ background: 'var(--color-green-light)', color: 'var(--color-green)' }}>{d.day}</span><span className="text-sm truncate max-w-[500px]" style={{ color: 'var(--color-text-secondary)' }}>{d.desc.split('.')[0]}</span></div>
+                    {expandedDays.has(i) ? <ChevronUp size={16} style={{ color: 'var(--color-text-muted)' }} /> : <ChevronDown size={16} style={{ color: 'var(--color-text-muted)' }} />}
                   </button>
-                  {expandedDays.has(i) && <div className="px-5 pb-4 text-sm text-foreground/50 leading-relaxed border-t border-card-border/20 pt-3">{d.desc}</div>}
+                  {expandedDays.has(i) && <div className="px-5 pb-4 text-sm leading-relaxed border-t pt-3" style={{ color: 'var(--color-text-secondary)', borderColor: 'var(--color-border)' }}>{d.desc}</div>}
                 </div>
               ))}
-              {parseResearchDays(research).length === 0 && <div className="glass-card px-5 py-4 text-sm text-foreground/50 whitespace-pre-wrap leading-relaxed">{research}</div>}
+              {parseResearchDays(research).length === 0 && <div className="glass-card px-5 py-4 text-sm whitespace-pre-wrap leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>{research}</div>}
             </div>)}
           </div>)}
 
           {/* PLACES */}
           {activeTab === 'places' && (<div>
-            {agentStatuses.places === 'active' && <div className="flex items-center gap-3 py-12 justify-center text-foreground/30"><Loader2 size={20} className="animate-spin text-purple" /> Searching places...</div>}
-            {places.length > 0 && (<div className="glass-card divide-y divide-card-border/20">{places.map((p, i) => (
-              <div key={i} className="flex items-center gap-4 px-5 py-3">
-                <input type="checkbox" checked={includedPlaces.has(p.name)} onChange={() => setIncludedPlaces(prev => { const n = new Set(prev); n.has(p.name) ? n.delete(p.name) : n.add(p.name); return n; })} className="h-4 w-4 rounded border-foreground/20 bg-navy-deep accent-teal cursor-pointer" />
-                <div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span className="text-sm font-medium text-foreground/80">{p.name}</span>{p.rating != null && <span className="flex items-center gap-0.5 text-xs text-purple/60"><Star size={10} className="fill-current" />{p.rating}</span>}</div><p className="text-xs text-foreground/30 truncate">{p.address}</p>{p.summary && <p className="text-xs text-foreground/40 mt-0.5 line-clamp-1">{p.summary}</p>}</div>
-                {p.mapsUrl && <a href={p.mapsUrl} target="_blank" rel="noopener noreferrer" className="text-foreground/20 hover:text-purple transition-colors"><ExternalLink size={14} /></a>}
+            {agentStatuses.places === 'active' && <div className="flex items-center gap-3 py-12 justify-center" style={{ color: 'var(--color-text-muted)' }}><Loader2 size={20} className="animate-spin" style={{ color: 'var(--color-purple)' }} /> Searching places...</div>}
+            {places.length > 0 && (<div className="glass-card divide-y" style={{ borderColor: 'var(--color-border)' }}>{places.map((p, i) => (
+              <div key={i} className="flex items-center gap-4 px-5 py-3" style={{ borderColor: 'var(--color-border)' }}>
+                <input type="checkbox" checked={includedPlaces.has(p.name)} onChange={() => setIncludedPlaces(prev => { const n = new Set(prev); n.has(p.name) ? n.delete(p.name) : n.add(p.name); return n; })} className="h-4 w-4 rounded cursor-pointer" style={{ accentColor: 'var(--color-primary)', borderColor: 'var(--color-border)', background: 'var(--color-bg-secondary)' }} />
+                <div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{p.name}</span>{p.rating != null && <span className="flex items-center gap-0.5 text-xs" style={{ color: 'var(--color-purple)' }}><Star size={10} className="fill-current" />{p.rating}</span>}</div><p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>{p.address}</p>{p.summary && <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--color-text-secondary)' }}>{p.summary}</p>}</div>
+                {p.mapsUrl && <a href={p.mapsUrl} target="_blank" rel="noopener noreferrer" className="transition-colors" style={{ color: 'var(--color-text-muted)' }}><ExternalLink size={14} /></a>}
               </div>))}</div>)}
+            {places.length > 0 && (
+              <div className="mt-4">
+                <MapView
+                  locations={places.filter(p => 'lat' in p && 'lng' in p).map(p => {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const pa = p as any;
+                    return { lat: pa.lat, lng: pa.lng, label: p.name, color: '#A78BFA' };
+                  })}
+                  height={280}
+                />
+              </div>
+            )}
           </div>)}
 
           {/* COMPARE */}
           {activeTab === 'compare' && (<div>
-            {combos.length === 0 && <div className="py-12 text-center text-foreground/30 text-sm">Waiting for flight and hotel results...</div>}
-            {combos.length > 0 && (<div className="glass-card overflow-hidden"><table className="w-full text-sm"><thead><tr className="border-b border-card-border text-left text-[11px] uppercase tracking-wider text-foreground/25">
+            {combos.length === 0 && <div className="py-12 text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>Waiting for flight and hotel results...</div>}
+            {combos.length > 0 && (<div className="glass-card overflow-hidden"><table className="w-full text-sm"><thead><tr className="border-b text-left text-[11px] uppercase tracking-wider" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
               <th className="px-4 py-2.5 font-medium">Flight</th><th className="px-4 py-2.5 font-medium">Hotel</th>
               <th className="px-4 py-2.5 font-medium text-right">Flights ({analysis?.travelers.adults}p)</th>
               <th className="px-4 py-2.5 font-medium text-right">Hotel ({analysis?.dates.duration}n)</th>
@@ -608,25 +636,25 @@ export default function InboxPage() {
                 const isBestRated = c.hotelRating === Math.max(...combos.map(x => x.hotelRating));
                 return (
                   <tr key={i} onClick={() => { setSelectedFlightIdx(c.fi); setSelectedHotelIdx(c.hi); }}
-                    className={`border-b border-card-border/20 last:border-0 cursor-pointer transition-all hover:bg-white/[0.02] ${isSelected ? 'bg-pink/[0.06]' : ''}`}>
-                    <td className="px-4 py-2.5 text-foreground/70">{c.airline}</td>
-                    <td className="px-4 py-2.5 text-foreground/70">{c.hotel}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-foreground/50">{c.flightTotal}€</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-foreground/50">{c.hotelTotal}€</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-foreground/80">{c.total}€</td>
-                    <td className="px-4 py-2.5"><span className="flex items-center gap-0.5 text-xs text-amber"><Star size={9} className="fill-amber" />{c.hotelRating}</span></td>
-                    <td className="px-4 py-2.5">{isBest && <span className="rounded bg-green/15 px-1.5 py-0.5 text-[9px] font-semibold text-green">Best Value</span>}{isBestRated && !isBest && <span className="rounded bg-amber/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber">Top Rated</span>}{isSelected && <span className="rounded bg-pink/15 px-1.5 py-0.5 text-[9px] font-semibold text-pink">Selected</span>}</td>
+                    className="border-b last:border-0 cursor-pointer transition-all" style={{ borderColor: 'var(--color-border)', background: isSelected ? 'var(--color-pink)' + '10' : undefined }}>
+                    <td className="px-4 py-2.5" style={{ color: 'var(--color-text-secondary)' }}>{c.airline}</td>
+                    <td className="px-4 py-2.5" style={{ color: 'var(--color-text-secondary)' }}>{c.hotel}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>{c.flightTotal}€</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>{c.hotelTotal}€</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold" style={{ color: 'var(--color-text)' }}>{c.total}€</td>
+                    <td className="px-4 py-2.5"><span className="flex items-center gap-0.5 text-xs" style={{ color: 'var(--color-amber)' }}><Star size={9} style={{ fill: 'var(--color-amber)' }} />{c.hotelRating}</span></td>
+                    <td className="px-4 py-2.5">{isBest && <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: 'var(--color-green-light)', color: 'var(--color-green)' }}>Best Value</span>}{isBestRated && !isBest && <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: 'var(--color-amber-light)', color: 'var(--color-amber)' }}>Top Rated</span>}{isSelected && <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: 'var(--color-pink)' + '15', color: 'var(--color-pink)' }}>Selected</span>}</td>
                   </tr>);
               })}
             </tbody></table></div>)}
           </div>)}
 
           {/* Bottom actions */}
-          <div className="flex items-center gap-4 mt-8 pt-6 border-t border-card-border/30">
-            <button onClick={() => setStep(2)} className="inline-flex items-center gap-2 rounded-lg bg-card border border-card-border px-5 py-2.5 text-sm font-medium text-foreground/60 hover:border-foreground/20 cursor-pointer transition-all"><ArrowLeft size={15} /> Back</button>
-            <button onClick={startCompose} disabled={!allAgentsDone || selectedFlightIdx < 0 || selectedHotelIdx < 0} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-pink/90 to-purple/90 px-6 py-2.5 text-sm font-semibold text-white transition-all hover:from-pink hover:to-purple active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:pointer-events-none"><PenTool size={15} /> Compose Response</button>
-            {!allAgentsDone && <span className="text-xs text-foreground/25">Waiting for all agents to complete...</span>}
-            {allAgentsDone && (selectedFlightIdx < 0 || selectedHotelIdx < 0) && <span className="text-xs text-amber">Select a flight and hotel before composing</span>}
+          <div className="flex items-center gap-4 mt-8 pt-6 border-t" style={{ borderColor: 'var(--color-border)' }}>
+            <button onClick={() => setStep(2)} className="inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-medium cursor-pointer transition-all" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}><ArrowLeft size={15} /> Back</button>
+            <button onClick={startCompose} disabled={!allAgentsDone || selectedFlightIdx < 0 || selectedHotelIdx < 0} className="inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-semibold text-white transition-all active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:pointer-events-none" style={{ background: 'var(--color-purple)', color: '#fff' }}><PenTool size={15} /> Compose Response</button>
+            {!allAgentsDone && <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Waiting for all agents to complete...</span>}
+            {allAgentsDone && (selectedFlightIdx < 0 || selectedHotelIdx < 0) && <span className="text-xs" style={{ color: 'var(--color-amber)' }}>Select a flight and hotel before composing</span>}
           </div>
         </div>
       )}
@@ -634,8 +662,8 @@ export default function InboxPage() {
       {/* ===== STEP 4 ===== */}
       {step === 4 && (
         <div className="animate-fade-in">
-          <h1 className="text-2xl font-bold text-foreground mb-1">{isStreaming ? 'Composing Response...' : 'Response Ready'}</h1>
-          <p className="text-sm text-foreground/40 mb-6">{isStreaming ? 'AI is writing the response email' : `Completed in ${totalTime}s — manually this takes 30-45 minutes`}</p>
+          <h1 className="text-2xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>{isStreaming ? 'Composing Response...' : 'Response Ready'}</h1>
+          <p className="text-sm mb-6" style={{ color: 'var(--color-text-secondary)' }}>{isStreaming ? 'AI is writing the response email' : `Completed in ${totalTime}s — manually this takes 30-45 minutes`}</p>
 
           <div className="flex gap-6">
             {/* LEFT: Email editor / preview */}
@@ -643,28 +671,28 @@ export default function InboxPage() {
               {/* Mode toggle */}
               {!isStreaming && composedEmail && (
                 <div className="flex gap-1 mb-3">
-                  <button onClick={() => setPreviewMode('editor')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${previewMode === 'editor' ? 'bg-teal/10 text-teal' : 'text-foreground/35 hover:text-foreground/55'}`}><PenTool size={12} /> Editor</button>
-                  <button onClick={() => setPreviewMode('html')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${previewMode === 'html' ? 'bg-teal/10 text-teal' : 'text-foreground/35 hover:text-foreground/55'}`}><Eye size={12} /> Preview</button>
+                  <button onClick={() => setPreviewMode('editor')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors" style={{ background: previewMode === 'editor' ? 'var(--color-primary-light)' : 'transparent', color: previewMode === 'editor' ? 'var(--color-primary)' : 'var(--color-text-muted)' }}><PenTool size={12} /> Editor</button>
+                  <button onClick={() => setPreviewMode('html')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors" style={{ background: previewMode === 'html' ? 'var(--color-primary-light)' : 'transparent', color: previewMode === 'html' ? 'var(--color-primary)' : 'var(--color-text-muted)' }}><Eye size={12} /> Preview</button>
                 </div>
               )}
 
               {/* Editor view */}
               {previewMode === 'editor' && (
                 <div className="glass-card overflow-hidden" style={{ borderColor: isStreaming ? 'rgba(236,72,153,0.2)' : 'rgba(16,185,129,0.2)' }}>
-                  <div className="flex items-center justify-between border-b border-card-border px-5 py-3">
-                    <div className="flex items-center gap-2">{isStreaming ? <Loader2 size={14} className="animate-spin text-pink" /> : <CheckCircle size={14} className="text-green" />}<span className="text-sm text-foreground/50">{isStreaming ? 'Writing...' : 'Complete'}</span></div>
+                  <div className="flex items-center justify-between border-b px-5 py-3" style={{ borderColor: 'var(--color-border)' }}>
+                    <div className="flex items-center gap-2">{isStreaming ? <Loader2 size={14} className="animate-spin" style={{ color: 'var(--color-pink)' }} /> : <CheckCircle size={14} style={{ color: 'var(--color-green)' }} />}<span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{isStreaming ? 'Writing...' : 'Complete'}</span></div>
                     <div className="flex gap-2">
                       {!isStreaming && composedEmail && (<>
-                        <button onClick={() => setIsEditing(!isEditing)} className="text-xs text-foreground/35 hover:text-foreground/60 cursor-pointer">{isEditing ? 'Done Editing' : 'Edit'}</button>
-                        <button onClick={copyEmail} className="flex items-center gap-1.5 rounded-lg bg-card border border-card-border px-3 py-1.5 text-xs text-foreground/60 hover:border-foreground/20 cursor-pointer transition-all">{copied ? <Check size={12} className="text-green" /> : <Copy size={12} />}{copied ? 'Copied!' : 'Copy'}</button>
+                        <button onClick={() => setIsEditing(!isEditing)} className="text-xs cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>{isEditing ? 'Done Editing' : 'Edit'}</button>
+                        <button onClick={copyEmail} className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs cursor-pointer transition-all" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{copied ? <Check size={12} style={{ color: 'var(--color-green)' }} /> : <Copy size={12} />}{copied ? 'Copied!' : 'Copy'}</button>
                       </>)}
                     </div>
                   </div>
                   <div className="min-h-[350px] px-5 py-4">
                     {isEditing ? (
-                      <textarea value={composedEmail} onChange={e => setComposedEmail(e.target.value)} className="w-full min-h-[350px] bg-transparent text-sm leading-relaxed text-foreground/80 outline-none resize-none" />
+                      <textarea value={composedEmail} onChange={e => setComposedEmail(e.target.value)} className="w-full min-h-[350px] bg-transparent text-sm leading-relaxed outline-none resize-none" style={{ color: 'var(--color-text)' }} />
                     ) : (
-                      <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/80">{composedEmail}{isStreaming && <span className="animate-blink ml-0.5 inline-block h-4 w-[2px] translate-y-[2px] bg-pink/70" />}</div>
+                      <div className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{composedEmail}{isStreaming && <span className="animate-blink ml-0.5 inline-block h-4 w-[2px] translate-y-[2px]" style={{ background: 'var(--color-pink)' }} />}</div>
                     )}
                   </div>
                 </div>
@@ -672,7 +700,7 @@ export default function InboxPage() {
 
               {/* HTML Preview */}
               {previewMode === 'html' && (
-                <div className="rounded-xl overflow-hidden border border-card-border/30 bg-white">
+                <div className="rounded-xl overflow-hidden border bg-white" style={{ borderColor: 'var(--color-border)' }}>
                   <iframe
                     srcDoc={emailToHtml(composedEmail, {
                       from: profile?.email || 'info@afea-travel.com',
@@ -689,27 +717,27 @@ export default function InboxPage() {
               {/* Action buttons */}
               {!isStreaming && (
                 <div className="flex flex-wrap gap-3 mt-4">
-                  <button onClick={() => { addToast('Email sent! (simulated)', 'success'); }} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-teal to-cyan px-6 py-2.5 text-sm font-semibold text-navy-deep transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer"><Send size={15} /> Send</button>
-                  <button onClick={() => addToast('Draft saved', 'success')} className="inline-flex items-center gap-2 rounded-lg bg-card border border-card-border px-4 py-2.5 text-sm text-foreground/60 hover:border-foreground/20 cursor-pointer transition-all"><Save size={14} /> Save Draft</button>
-                  <button onClick={copyEmail} className="inline-flex items-center gap-2 rounded-lg bg-card border border-card-border px-4 py-2.5 text-sm text-foreground/60 hover:border-foreground/20 cursor-pointer transition-all"><Copy size={14} /> Copy Plain Text</button>
+                  <button onClick={() => { addToast('Email sent! (simulated)', 'success'); }} className="inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-semibold transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer" style={{ background: 'var(--color-primary)', color: '#fff' }}><Send size={15} /> Send</button>
+                  <button onClick={() => addToast('Draft saved', 'success')} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm cursor-pointer transition-all" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}><Save size={14} /> Save Draft</button>
+                  <button onClick={copyEmail} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm cursor-pointer transition-all" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}><Copy size={14} /> Copy Plain Text</button>
 
                   {/* Translate dropdown */}
                   <div className="relative group">
-                    <button disabled={translating} className="inline-flex items-center gap-2 rounded-lg bg-card border border-card-border px-4 py-2.5 text-sm text-foreground/60 hover:border-foreground/20 cursor-pointer transition-all disabled:opacity-50">
+                    <button disabled={translating} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm cursor-pointer transition-all disabled:opacity-50" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
                       {translating ? <Loader2 size={14} className="animate-spin" /> : <Languages size={14} />} Translate
                     </button>
                     <div className="absolute left-0 top-full mt-1 hidden group-hover:block z-10">
                       <div className="glass-card py-1 min-w-[140px] shadow-lg">
                         {LANGUAGES.map(l => (
-                          <button key={l.value} onClick={() => translateTo(l.value)} className="w-full text-left px-4 py-2 text-sm text-foreground/60 hover:bg-white/[0.04] hover:text-foreground cursor-pointer">{l.label}</button>
+                          <button key={l.value} onClick={() => translateTo(l.value)} className="w-full text-left px-4 py-2 text-sm cursor-pointer" style={{ color: 'var(--color-text-secondary)' }}>{l.label}</button>
                         ))}
                       </div>
                     </div>
                   </div>
 
                   {/* Follow-up */}
-                  <button onClick={() => setShowFollowUpForm(!showFollowUpForm)} className="inline-flex items-center gap-2 rounded-lg bg-card border border-card-border px-4 py-2.5 text-sm text-foreground/60 hover:border-foreground/20 cursor-pointer transition-all"><CalendarPlus size={14} /> Schedule Follow-up</button>
-                  <button onClick={handleReset} className="inline-flex items-center gap-2 rounded-lg bg-card border border-card-border px-4 py-2.5 text-sm text-foreground/60 hover:border-foreground/20 cursor-pointer transition-all"><RotateCcw size={14} /> New Email</button>
+                  <button onClick={() => setShowFollowUpForm(!showFollowUpForm)} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm cursor-pointer transition-all" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}><CalendarPlus size={14} /> Schedule Follow-up</button>
+                  <button onClick={handleReset} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm cursor-pointer transition-all" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}><RotateCcw size={14} /> New Email</button>
                 </div>
               )}
 
@@ -717,11 +745,11 @@ export default function InboxPage() {
               {showFollowUpForm && !isStreaming && (
                 <div className="glass-card p-4 mt-4 animate-fade-in">
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-medium text-foreground/70">Schedule Follow-up</h4>
-                    <button onClick={() => setShowFollowUpForm(false)} className="text-foreground/30 hover:text-foreground/50 cursor-pointer"><X size={14} /></button>
+                    <h4 className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Schedule Follow-up</h4>
+                    <button onClick={() => setShowFollowUpForm(false)} className="cursor-pointer" style={{ color: 'var(--color-text-muted)' }}><X size={14} /></button>
                   </div>
-                  <p className="text-xs text-foreground/40 mb-3">A follow-up email will be generated in {settings?.followUpDays || 3} days if no reply is received.</p>
-                  <button onClick={scheduleFollowUp} className="inline-flex items-center gap-2 rounded-lg bg-amber/10 border border-amber/20 px-4 py-2 text-sm font-medium text-amber hover:bg-amber/20 cursor-pointer transition-colors"><CalendarPlus size={14} /> Confirm Follow-up</button>
+                  <p className="text-xs mb-3" style={{ color: 'var(--color-text-secondary)' }}>A follow-up email will be generated in {settings?.followUpDays || 3} days if no reply is received.</p>
+                  <button onClick={scheduleFollowUp} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium cursor-pointer transition-colors" style={{ background: 'var(--color-amber-light)', borderColor: 'var(--color-amber)', color: 'var(--color-amber)' }}><CalendarPlus size={14} /> Confirm Follow-up</button>
                 </div>
               )}
             </div>
@@ -729,27 +757,27 @@ export default function InboxPage() {
             {/* RIGHT: Summary sidebar */}
             {!isStreaming && (
               <div className="hidden lg:block w-72 flex-shrink-0 space-y-4 animate-fade-in">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground/25">Selected Options</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>Selected Options</h3>
                 {selectedFlight && (
-                  <div className="glass-card p-3"><div className="flex items-center gap-2 text-xs text-cyan mb-1"><Plane size={12} /> Flight</div><p className="text-sm font-medium text-foreground/80">{selectedFlight.airline}</p><p className="text-xs text-foreground/40">{fmtClock(selectedFlight.departureTime)} → {fmtClock(selectedFlight.arrivalTime)} · {selectedFlight.price}€/person</p></div>
+                  <div className="glass-card p-3"><div className="flex items-center gap-2 text-xs mb-1" style={{ color: 'var(--color-primary)' }}><Plane size={12} /> Flight</div><p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{selectedFlight.airline}</p><p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{fmtClock(selectedFlight.departureTime)} → {fmtClock(selectedFlight.arrivalTime)} · {selectedFlight.price}€/person</p></div>
                 )}
                 {selectedHotel && (
-                  <div className="glass-card p-3"><div className="flex items-center gap-2 text-xs text-amber mb-1"><Building2 size={12} /> Hotel</div><p className="text-sm font-medium text-foreground/80">{selectedHotel.name}</p><p className="text-xs text-foreground/40">{selectedHotel.area} · {selectedHotel.pricePerNight}€/night · ★{selectedHotel.rating}</p></div>
+                  <div className="glass-card p-3"><div className="flex items-center gap-2 text-xs mb-1" style={{ color: 'var(--color-amber)' }}><Building2 size={12} /> Hotel</div><p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{selectedHotel.name}</p><p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{selectedHotel.area} · {selectedHotel.pricePerNight}€/night · ★{selectedHotel.rating}</p></div>
                 )}
                 {/* Cost breakdown */}
                 {analysis && selectedFlight && selectedHotel && (
                   <div className="glass-card p-3">
-                    <div className="flex items-center gap-2 text-xs text-pink mb-2"><BarChart3 size={12} /> Cost Estimate</div>
+                    <div className="flex items-center gap-2 text-xs mb-2" style={{ color: 'var(--color-pink)' }}><BarChart3 size={12} /> Cost Estimate</div>
                     <div className="space-y-1 text-xs">
-                      <div className="flex justify-between text-foreground/50"><span>Flights ({analysis.travelers.adults}x{selectedFlight.price}€)</span><span className="tabular-nums">{selectedFlight.price * analysis.travelers.adults}€</span></div>
-                      <div className="flex justify-between text-foreground/50"><span>Hotel ({analysis.dates.duration}x{selectedHotel.pricePerNight}€)</span><span className="tabular-nums">{selectedHotel.pricePerNight * analysis.dates.duration}€</span></div>
-                      <div className="flex justify-between text-foreground/50"><span>Est. meals/activities</span><span className="tabular-nums">~{analysis.dates.duration * 50 * analysis.travelers.adults}€</span></div>
-                      <div className="flex justify-between font-semibold text-foreground/80 pt-1 border-t border-card-border/30"><span>Total</span><span className="tabular-nums">{selectedFlight.price * analysis.travelers.adults + selectedHotel.pricePerNight * analysis.dates.duration + analysis.dates.duration * 50 * analysis.travelers.adults}€</span></div>
+                      <div className="flex justify-between" style={{ color: 'var(--color-text-secondary)' }}><span>Flights ({analysis.travelers.adults}x{selectedFlight.price}€)</span><span className="tabular-nums">{selectedFlight.price * analysis.travelers.adults}€</span></div>
+                      <div className="flex justify-between" style={{ color: 'var(--color-text-secondary)' }}><span>Hotel ({analysis.dates.duration}x{selectedHotel.pricePerNight}€)</span><span className="tabular-nums">{selectedHotel.pricePerNight * analysis.dates.duration}€</span></div>
+                      <div className="flex justify-between" style={{ color: 'var(--color-text-secondary)' }}><span>Est. meals/activities</span><span className="tabular-nums">~{analysis.dates.duration * 50 * analysis.travelers.adults}€</span></div>
+                      <div className="flex justify-between font-semibold pt-1 border-t" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}><span>Total</span><span className="tabular-nums">{selectedFlight.price * analysis.travelers.adults + selectedHotel.pricePerNight * analysis.dates.duration + analysis.dates.duration * 50 * analysis.travelers.adults}€</span></div>
                     </div>
                   </div>
                 )}
                 {totalTime > 0 && (
-                  <div className="glass-card p-3"><div className="flex items-center gap-2 text-xs text-green mb-1"><Clock size={12} /> Time</div><p className="text-sm font-bold text-green tabular-nums">{totalTime}s</p><p className="text-[10px] text-foreground/25">vs 30-45 min manually</p></div>
+                  <div className="glass-card p-3"><div className="flex items-center gap-2 text-xs mb-1" style={{ color: 'var(--color-green)' }}><Clock size={12} /> Time</div><p className="text-sm font-bold tabular-nums" style={{ color: 'var(--color-green)' }}>{totalTime}s</p><p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>vs 30-45 min manually</p></div>
                 )}
               </div>
             )}
@@ -757,7 +785,9 @@ export default function InboxPage() {
         </div>
       )}
 
-      <div className="mt-12 pb-4 text-center text-[11px] text-foreground/15">Powered by <span className="text-foreground/25">GPT-4o</span> + <span className="text-foreground/25">Duffel</span> + <span className="text-foreground/25">Google Places</span></div>
+      <div className="mt-12 pb-4 text-center text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+        © 2026 Revival SA — AI &amp; Business Intelligence
+      </div>
     </div>
   );
 }

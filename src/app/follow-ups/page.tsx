@@ -47,9 +47,9 @@ function relativeCreated(iso: string): string {
 }
 
 const STATUS_STYLES: Record<FollowUp['status'], { bg: string; text: string; label: string }> = {
-  pending: { bg: 'bg-amber/10', text: 'text-amber', label: 'Pending' },
-  sent: { bg: 'bg-green/10', text: 'text-green', label: 'Sent' },
-  cancelled: { bg: 'bg-foreground/[0.06]', text: 'text-foreground/40', label: 'Cancelled' },
+  pending: { bg: 'var(--color-amber-light)', text: 'var(--color-amber)', label: 'Pending' },
+  sent: { bg: 'var(--color-green-light)', text: 'var(--color-green)', label: 'Sent' },
+  cancelled: { bg: 'var(--color-bg-secondary)', text: 'var(--color-text-muted)', label: 'Cancelled' },
 };
 
 /* ================================================================
@@ -69,7 +69,7 @@ export default function FollowUpsPage() {
     reload();
   }, [reload]);
 
-  /* ── Actions ─────────────────────────────────────────────── */
+  /* -- Actions ------------------------------------------------ */
 
   const markSent = (id: string) => {
     updateFollowUp(id, { status: 'sent' });
@@ -83,7 +83,7 @@ export default function FollowUpsPage() {
     reload();
   };
 
-  /* ── Filtering ───────────────────────────────────────────── */
+  /* -- Filtering ---------------------------------------------- */
 
   const filtered =
     activeTab === 'all'
@@ -92,7 +92,7 @@ export default function FollowUpsPage() {
 
   const pendingCount = followUps.filter((f) => f.status === 'pending').length;
 
-  /* ── Tabs config ─────────────────────────────────────────── */
+  /* -- Tabs config -------------------------------------------- */
 
   const tabs: { key: FilterTab; label: string }[] = [
     { key: 'all', label: 'All' },
@@ -103,52 +103,61 @@ export default function FollowUpsPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10 animate-fade-in">
-      {/* ── Header ─────────────────────────────────────────── */}
+      {/* -- Header --------------------------------------------- */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-1">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber/10">
-            <CalendarClock size={18} className="text-amber" />
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-lg"
+            style={{ background: 'var(--color-amber-light)' }}
+          >
+            <CalendarClock size={18} style={{ color: 'var(--color-amber)' }} />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Follow-ups</h1>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>
+            Follow-ups
+          </h1>
         </div>
-        <p className="text-sm text-foreground/40 ml-12">
+        <p className="text-sm ml-12" style={{ color: 'var(--color-text-muted)' }}>
           {pendingCount} pending follow-up{pendingCount !== 1 ? 's' : ''} scheduled
         </p>
       </div>
 
-      {/* ── Filter Tabs ────────────────────────────────────── */}
+      {/* -- Filter Tabs ---------------------------------------- */}
       <div className="flex items-center gap-1.5 mb-6">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors cursor-pointer ${
+            className="rounded-lg px-4 py-2 text-sm font-medium transition-colors cursor-pointer"
+            style={
               activeTab === tab.key
-                ? 'bg-teal/10 text-teal'
-                : 'text-foreground/35 hover:text-foreground/55 hover:bg-white/[0.03]'
-            }`}
+                ? { background: 'var(--color-primary-light)', color: 'var(--color-primary)' }
+                : { color: 'var(--color-text-muted)' }
+            }
           >
             {tab.label}
           </button>
         ))}
       </div>
 
-      {/* ── Empty State ────────────────────────────────────── */}
+      {/* -- Empty State ---------------------------------------- */}
       {filtered.length === 0 && (
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-foreground/[0.03] mb-4">
-            <Inbox size={32} className="text-foreground/15" />
+          <div
+            className="flex h-16 w-16 items-center justify-center rounded-2xl mb-4"
+            style={{ background: 'var(--color-bg-secondary)' }}
+          >
+            <Inbox size={32} style={{ color: 'var(--color-text-muted)' }} />
           </div>
-          <p className="text-sm font-medium text-foreground/30">
+          <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>
             No follow-ups {activeTab !== 'all' ? `with status "${activeTab}"` : 'scheduled'}
           </p>
-          <p className="mt-1 text-xs text-foreground/20">
+          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)', opacity: 0.7 }}>
             Follow-ups are created automatically after processing emails
           </p>
         </div>
       )}
 
-      {/* ── List ───────────────────────────────────────────── */}
+      {/* -- List ----------------------------------------------- */}
       {filtered.length > 0 && (
         <div className="space-y-3">
           {filtered.map((fu, i) => {
@@ -159,47 +168,48 @@ export default function FollowUpsPage() {
                 className={`glass-card p-5 animate-fade-in-up stagger-${Math.min(i + 1, 6)}`}
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  {/* Left — Info */}
+                  {/* Left -- Info */}
                   <div className="flex-1 min-w-0">
                     {/* Name + email */}
-                    <p className="text-sm font-semibold text-foreground/80">
+                    <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
                       {fu.customerName}
                     </p>
-                    <p className="flex items-center gap-1.5 mt-0.5 text-xs text-foreground/35">
+                    <p className="flex items-center gap-1.5 mt-0.5 text-xs" style={{ color: 'var(--color-text-muted)' }}>
                       <Mail size={11} />
                       {fu.customerEmail}
                     </p>
 
                     {/* Destination + scheduled date */}
-                    <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-foreground/45">
+                    <div className="mt-3 flex flex-wrap items-center gap-4 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                       <span className="inline-flex items-center gap-1">
-                        <MapPin size={12} className="text-foreground/25" />
+                        <MapPin size={12} style={{ color: 'var(--color-text-muted)' }} />
                         {fu.destination}
                       </span>
                       <span className="inline-flex items-center gap-1">
-                        <Calendar size={12} className="text-foreground/25" />
+                        <Calendar size={12} style={{ color: 'var(--color-text-muted)' }} />
                         Scheduled: {fmtDate(fu.scheduledDate)}
                       </span>
                       <span className="inline-flex items-center gap-1">
-                        <Clock size={12} className="text-foreground/25" />
+                        <Clock size={12} style={{ color: 'var(--color-text-muted)' }} />
                         Created {relativeCreated(fu.createdAt)}
                       </span>
                     </div>
 
                     {/* Original response excerpt */}
                     {fu.originalResponse && (
-                      <p className="mt-2 text-xs text-foreground/25 line-clamp-1">
+                      <p className="mt-2 text-xs line-clamp-1" style={{ color: 'var(--color-text-muted)' }}>
                         {fu.originalResponse.slice(0, 100)}
                         {fu.originalResponse.length > 100 ? '...' : ''}
                       </p>
                     )}
                   </div>
 
-                  {/* Right — Badge + Actions */}
+                  {/* Right -- Badge + Actions */}
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {/* Status badge */}
                     <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${style.bg} ${style.text}`}
+                      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
+                      style={{ background: style.bg, color: style.text }}
                     >
                       {style.label}
                     </span>
@@ -209,14 +219,16 @@ export default function FollowUpsPage() {
                       <>
                         <button
                           onClick={() => markSent(fu.id)}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-green/10 px-3 py-1.5 text-xs font-medium text-green transition-colors hover:bg-green/20 cursor-pointer"
+                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer"
+                          style={{ background: 'var(--color-green-light)', color: 'var(--color-green)' }}
                         >
                           <CheckCircle size={13} />
                           Mark Sent
                         </button>
                         <button
                           onClick={() => cancel(fu.id)}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-foreground/[0.05] px-3 py-1.5 text-xs font-medium text-foreground/40 transition-colors hover:bg-foreground/[0.08] hover:text-foreground/55 cursor-pointer"
+                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer"
+                          style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-muted)' }}
                         >
                           <XCircle size={13} />
                           Cancel
@@ -233,10 +245,17 @@ export default function FollowUpsPage() {
 
       {/* Footer count */}
       {filtered.length > 0 && (
-        <p className="mt-4 text-center text-xs text-foreground/20">
+        <p className="mt-4 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
           Showing {filtered.length} follow-up{filtered.length !== 1 ? 's' : ''}
         </p>
       )}
+
+      {/* Footer */}
+      <div className="mt-8 text-center">
+        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          &copy; 2026 Revival SA — AI &amp; Business Intelligence
+        </p>
+      </div>
     </div>
   );
 }
