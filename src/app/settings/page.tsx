@@ -8,6 +8,10 @@ import {
   MessageSquare,
   ToggleLeft,
   SlidersHorizontal,
+  Brain,
+  RefreshCw,
+  Users,
+  FileText,
 } from 'lucide-react';
 import {
   loadSettings,
@@ -146,6 +150,37 @@ export default function SettingsPage() {
                 className="w-full rounded-lg border border-card-border bg-navy-deep/50 px-4 py-2.5 text-sm text-foreground/80 outline-none focus:border-teal/50 focus:ring-1 focus:ring-teal/20 resize-none"
               />
             </div>
+
+            {/* Include Cost Breakdown */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-foreground/70">
+                  Include Cost Breakdown
+                </p>
+                <p className="text-xs text-foreground/30">
+                  Add an estimated total cost summary in the email
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  update('includeCostBreakdown', !settings.includeCostBreakdown)
+                }
+                className={`relative inline-flex h-6 w-11 cursor-pointer items-center rounded-full transition-colors ${
+                  settings.includeCostBreakdown
+                    ? 'bg-teal'
+                    : 'bg-foreground/15'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                    settings.includeCostBreakdown
+                      ? 'translate-x-6'
+                      : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
         </section>
 
@@ -239,6 +274,167 @@ export default function SettingsPage() {
                 <span
                   className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
                     settings.includeWeatherInfo
+                      ? 'translate-x-6'
+                      : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* ── AI Behavior ────────────────────────────────────────── */}
+        <section className="glass-card p-6">
+          <div className="flex items-center gap-2 mb-5">
+            <Brain size={16} className="text-cyan" />
+            <h2 className="text-sm font-semibold text-foreground/70">
+              AI Behavior
+            </h2>
+          </div>
+
+          <div className="space-y-5">
+            {/* AI Review Mode */}
+            <div>
+              <label className="mb-2 block text-xs font-medium text-foreground/50">
+                AI Review Mode
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="aiReviewMode"
+                    value="manual"
+                    checked={settings.aiReviewMode === 'manual'}
+                    onChange={() => update('aiReviewMode', 'manual')}
+                    className="accent-teal"
+                  />
+                  <span className="text-sm text-foreground/70">Manual review (recommended)</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="aiReviewMode"
+                    value="auto"
+                    checked={settings.aiReviewMode === 'auto'}
+                    onChange={() => update('aiReviewMode', 'auto')}
+                    className="accent-teal"
+                  />
+                  <span className="text-sm text-foreground/70">Auto-compose</span>
+                </label>
+                {settings.aiReviewMode === 'auto' && (
+                  <p className="ml-6 text-xs text-amber">
+                    AI will automatically compose responses without review
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Response Length */}
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-foreground/50">
+                Response Length
+              </label>
+              <select
+                value={settings.responseLength}
+                onChange={(e) =>
+                  update('responseLength', e.target.value as AppSettings['responseLength'])
+                }
+                className="w-full rounded-lg border border-card-border bg-navy-deep/50 px-4 py-2.5 text-sm text-foreground/80 outline-none focus:border-teal/50 focus:ring-1 focus:ring-teal/20"
+              >
+                <option value="concise">Concise</option>
+                <option value="standard">Standard</option>
+                <option value="detailed">Detailed</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Follow-up ──────────────────────────────────────────── */}
+        <section className="glass-card p-6">
+          <div className="flex items-center gap-2 mb-5">
+            <RefreshCw size={16} className="text-green" />
+            <h2 className="text-sm font-semibold text-foreground/70">
+              Follow-up
+            </h2>
+          </div>
+
+          <div className="space-y-4">
+            {/* Auto Follow-up */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-foreground/70">Auto Follow-up</p>
+                <p className="text-xs text-foreground/30">
+                  Automatically schedule follow-up emails for unanswered proposals
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => update('autoFollowUp', !settings.autoFollowUp)}
+                className={`relative inline-flex h-6 w-11 cursor-pointer items-center rounded-full transition-colors ${
+                  settings.autoFollowUp ? 'bg-teal' : 'bg-foreground/15'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                    settings.autoFollowUp
+                      ? 'translate-x-6'
+                      : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Follow-up After (days) — only visible when autoFollowUp is true */}
+            {settings.autoFollowUp && (
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-foreground/50">
+                  Follow-up After (days)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={settings.followUpDays}
+                  onChange={(e) => update('followUpDays', Number(e.target.value))}
+                  className="w-32 rounded-lg border border-card-border bg-navy-deep/50 px-4 py-2.5 text-sm text-foreground/80 outline-none focus:border-teal/50 focus:ring-1 focus:ring-teal/20"
+                />
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* ── Customer ───────────────────────────────────────────── */}
+        <section className="glass-card p-6">
+          <div className="flex items-center gap-2 mb-5">
+            <Users size={16} className="text-purple" />
+            <h2 className="text-sm font-semibold text-foreground/70">
+              Customer
+            </h2>
+          </div>
+
+          <div className="space-y-4">
+            {/* Customer Recognition */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-foreground/70">Customer Recognition</p>
+                <p className="text-xs text-foreground/30">
+                  Automatically recognize returning customers and personalize responses
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  update('customerRecognition', !settings.customerRecognition)
+                }
+                className={`relative inline-flex h-6 w-11 cursor-pointer items-center rounded-full transition-colors ${
+                  settings.customerRecognition
+                    ? 'bg-teal'
+                    : 'bg-foreground/15'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                    settings.customerRecognition
                       ? 'translate-x-6'
                       : 'translate-x-1'
                   }`}

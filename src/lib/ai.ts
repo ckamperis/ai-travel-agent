@@ -26,6 +26,8 @@ export interface ComposeSettings {
   includeItinerary?: boolean;
   includeWeatherInfo?: boolean;
   includedPlaces?: string[];
+  responseLength?: 'concise' | 'standard' | 'detailed';
+  returningCustomerContext?: { name: string; tripCount: number; lastDestination: string };
 }
 
 const LANGUAGE_MAP: Record<string, string> = {
@@ -168,6 +170,21 @@ export async function* composeEmail(
     settingsInstructions.push("Include a brief note about expected weather at the destination");
   }
 
+  // Response length support
+  if (settings?.responseLength === 'concise') {
+    settingsInstructions.push("Keep the response brief, under 300 words.");
+  } else if (settings?.responseLength === 'detailed') {
+    settingsInstructions.push("Provide a comprehensive, detailed response.");
+  }
+
+  // Returning customer context
+  if (settings?.returningCustomerContext) {
+    const ctx = settings.returningCustomerContext;
+    settingsInstructions.push(
+      `This is a returning customer who has traveled with us ${ctx.tripCount} times. Their last trip was to ${ctx.lastDestination}. Open with a personal touch referencing their history with the agency.`
+    );
+  }
+
   const settingsBlock = settingsInstructions.length > 0
     ? `\n${settingsInstructions.join("\n")}`
     : "";
@@ -188,7 +205,9 @@ export async function* composeEmail(
     messages: [
       {
         role: "system",
-        content: `You are a professional travel agent at Afea Travel composing a response email.
+        content: `CRITICAL: Do NOT use markdown formatting. No **, ##, *, bullet lists with -, or numbered lists with 1. 2. 3. Write in clean, natural paragraphs with proper sentence structure. This is a professional email, not a markdown document. Write as a human travel consultant would — warm, clear, with paragraph breaks for structure.
+
+You are a professional travel agent at Afea Travel composing a response email.
 Write a warm, detailed, and well-organized response that:
 - Addresses the customer by name
 - ${allResults.selectedFlight ? 'Presents the RECOMMENDED flight prominently, then briefly mentions 1-2 alternatives' : 'Presents flight options in a clear format'}
@@ -229,5 +248,46 @@ Compose a complete, professional response email from Afea Travel to the customer
     if (delta) {
       yield delta;
     }
+  }
+}
+
+export async function translateText(text: string, targetLanguage: string): Promise<string> {
+  const client = getClient();
+  const langName = LANGUAGE_MAP[targetLanguage] || targetLanguage;
+  const response = await client.chat.completions.create({
+    model: MODEL,
+    max_tokens: 3000,
+    messages: [
+      { role: "system", content: `Translate the following travel agency email to ${langName}. Preserve the formatting, tone, and structure exactly. Do not add any markdown formatting. Output clean text only.` },
+      { role: "user", content: text },
+    ],
+  });
+  return response.choices[0]?.message?.content || text;
+}
+
+export async function* composeFollowUp(
+  customerName: string,
+  destination: string,
+  originalResponse: string,
+  settings?: ComposeSettings
+): AsyncGenerator<string> {
+  const client = getClient();
+  // Build language instruction same as composeEmail
+  let langInst = "Write in English";
+  if (settings?.responseLanguage && LANGUAGE_MAP[settings.responseLanguage]) {
+    langInst = `Write in ${LANGUAGE_MAP[settings.responseLanguage]}`;
+  }
+  const stream = await client.chat.completions.create({
+    model: MODEL,
+    max_tokens: 1000,
+    stream: true,
+    messages: [
+      { role: "system", content: `You are a professional travel agent writing a friendly follow-up email. ${langInst}. Do NOT use markdown formatting. Write clean, natural paragraphs. Be warm and helpful. Keep it brief — 100-150 words.${settings?.emailSignature ? `\n\nSign off with:\n${settings.emailSignature}` : ''}` },
+      { role: "user", content: `Write a follow-up email to ${customerName} about their trip to ${destination}. We sent them a proposal but haven't heard back. Reference that we previously provided flight and hotel options. Ask if they'd like to proceed or need any changes.\n\nOriginal response we sent (for context, do not repeat it):\n${originalResponse.slice(0, 500)}` },
+    ],
+  });
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content;
+    if (delta) yield delta;
   }
 }

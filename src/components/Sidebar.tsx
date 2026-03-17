@@ -4,8 +4,11 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  LayoutDashboard,
   Inbox,
   CheckSquare,
+  CalendarClock,
+  Users,
   Settings,
   Bot,
   FileText,
@@ -17,8 +20,11 @@ import {
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { href: '/', label: 'Inbox', icon: Inbox },
+  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/inbox', label: 'Inbox', icon: Inbox },
   { href: '/processed', label: 'Processed', icon: CheckSquare },
+  { href: '/follow-ups', label: 'Follow-ups', icon: CalendarClock },
+  { href: '/customers', label: 'Customers', icon: Users },
   { href: '/settings', label: 'Settings', icon: Settings },
   { href: '/agents', label: 'Agents', icon: Bot },
   { href: '/templates', label: 'Templates', icon: FileText },

@@ -3,7 +3,7 @@
 ## Product Overview
 A product-ready AI-powered email assistant that handles travel inquiries. Multiple AI agents collaborate to analyze customer emails, search flights/hotels/places, research itineraries, and compose professional responses — all in real-time.
 
-**Concept: "Your AI Employee"** — A working SaaS tool (not a demo) with sidebar navigation, settings, templates, agent configuration, and a step-by-step wizard for processing any customer email in any language.
+**Concept: "Your AI Employee"** — A complete SaaS tool with dashboard, customer CRM, follow-up system, email preview, price comparison, weather forecasts, multi-language translation, and AI output cleanup. Human-in-the-loop: every AI action is reviewed before sending.
 
 ## Architecture
 
@@ -60,23 +60,31 @@ ai-travel-agent/
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx                # Root layout with sidebar + toast
-│   │   ├── page.tsx                  # Inbox — step wizard (main flow)
-│   │   ├── settings/page.tsx         # Settings page
+│   │   ├── page.tsx                  # Dashboard (home page)
+│   │   ├── inbox/page.tsx            # Inbox — 4-step wizard (main flow)
+│   │   ├── processed/page.tsx        # Processed emails history
+│   │   ├── follow-ups/page.tsx       # Follow-up management
+│   │   ├── customers/page.tsx        # Customer CRM
+│   │   ├── settings/page.tsx         # Settings (AI, follow-up, content)
 │   │   ├── agents/page.tsx           # Agent configuration
 │   │   ├── templates/page.tsx        # Email templates CRUD
 │   │   ├── profile/page.tsx          # Profile settings
-│   │   ├── processed/page.tsx        # Processed emails history
 │   │   └── api/
 │   │       ├── orchestrate/route.ts  # SSE: analyze + agents (mode: full|analyze|search)
-│   │       └── compose/route.ts      # SSE: compose with selections + settings
+│   │       ├── compose/route.ts      # SSE: compose with selections + settings
+│   │       ├── translate/route.ts    # Translate composed email
+│   │       └── follow-up-compose/route.ts  # SSE: generate follow-up email
 │   ├── agents/                       # (unchanged from before)
 │   ├── components/
-│   │   ├── Sidebar.tsx               # Navigation sidebar
+│   │   ├── Sidebar.tsx               # Navigation sidebar (9 items)
 │   │   ├── Breadcrumb.tsx            # Breadcrumb navigation
 │   │   └── Toast.tsx                 # Toast notification system
 │   ├── lib/
-│   │   ├── settings.ts              # Settings, Profile, Templates, History + localStorage
-│   │   ├── ai.ts                     # OpenAI API helper (with compose settings)
+│   │   ├── settings.ts              # Settings, Profile, Templates, History, Customers, Follow-ups
+│   │   ├── ai.ts                     # OpenAI: compose, translate, follow-up (no markdown)
+│   │   ├── markdown-strip.ts         # Strip markdown from AI output
+│   │   ├── email-to-html.ts          # Convert plain text to styled HTML preview
+│   │   ├── weather.ts                # Weather forecasts (Open-Meteo + fallback)
 │   │   ├── duffel.ts                 # Duffel API client
 │   │   ├── google-places.ts          # Google Places API client
 │   │   └── mock-hotels.ts            # Curated Athens hotel data
@@ -157,26 +165,37 @@ Settings: `{ responseLanguage, tone, emailSignature, defaultGreeting, includePri
 ```
 
 ## UI Layout
-- **Sidebar** (always visible): Logo, nav menu (Inbox, Processed, Settings, Agents, Templates, Profile), notification bell, user avatar
-- **Main Content**: route-based pages
+- **Sidebar** (9 items): Dashboard, Inbox, Processed, Follow-ups, Customers, Settings, Agents, Templates, Profile
+- **Main Content**: route-based pages with breadcrumb navigation
 
-## Inbox Step Wizard (main flow)
-1. **Step 1 — Email Input**: Sample inbox with 3 pre-loaded emails (Greece, Rome, Santorini) + "Paste custom email" option
-2. **Step 2 — Analysis**: Editable form with all extracted fields (origin, destination, dates, travelers, budget, interests, language). User can modify before searching. "Confirm & Search" button.
-3. **Step 3 — Results**: 4 tabs (Flights, Hotels, Itinerary, Places):
-   - Flights: sortable table (price/duration/stops), radio selection
-   - Hotels: cards with radio selection, amenities, metro info
-   - Itinerary: collapsible day-by-day sections
-   - Places: checkboxes to include/exclude from final email, Google Maps links
-   - "Compose Response" button (enabled when all agents done)
-4. **Step 4 — Compose**: Streaming email on left, selected options summary on right. Editable after streaming. Send + Copy + New Email buttons. Saves to history.
+## Dashboard (/)
+- 4 stat cards: Emails Processed, Avg Response Time, Completed Today, Pending Follow-ups
+- Recent Activity feed from history
+- Quick action: "Process New Email" → /inbox
+
+## Inbox Step Wizard (/inbox)
+1. **Step 1 — Email Input**: Sample inbox (3 emails) + paste custom
+2. **Step 2 — Analysis**: Editable form. Customer recognition banner for returning customers.
+3. **Step 3 — Results**: 5 tabs:
+   - Flights: sortable table, radio selection
+   - Hotels: cards with radio selection
+   - Itinerary: collapsible day-by-day
+   - Places: checkboxes + Google Maps links
+   - Compare: price comparison matrix (flight+hotel combos, Best Value/Top Rated badges)
+   - Weather widget above tabs (Open-Meteo API)
+4. **Step 4 — Compose**:
+   - Editor/Preview toggle: plain text editor vs styled HTML preview (iframe)
+   - AI output cleaned of all markdown (stripMarkdown post-processing + prompt instruction)
+   - Right sidebar: selected options + cost breakdown (flights + hotel + meals estimate)
+   - Actions: Send, Save Draft, Copy, Translate (6 languages), Schedule Follow-up, New Email
+   - Customer auto-saved to CRM. History entry saved with composed text.
 
 ## Other Pages
-- **Settings**: Response language, tone, email signature, greeting, toggles (price breakdown, itinerary, weather), budget tolerance slider, hotel min rating slider
-- **Agents**: 5 agent cards with status dots (connected/mock/not configured), enable/disable toggles
-- **Templates**: CRUD for email templates with variable placeholders ({{guest_name}}, {{flight_details}}, etc.)
-- **Profile**: Agency name, agent name, email
-- **Processed**: History table from localStorage
+- **Follow-ups** (/follow-ups): manage scheduled follow-ups, mark sent/cancelled, AI-generated follow-up emails
+- **Customers** (/customers): CRM with tags, notes, trip history, preferred language
+- **Settings**: AI Behavior (review mode, response length), Follow-up (auto, days), Customer recognition, Email content toggles
+- **Agents, Templates, Profile**: unchanged from before
+- **Processed**: history table with composed response stored
 
 ## Duffel API Reference
 - **Base URL:** https://api.duffel.com
@@ -326,15 +345,13 @@ whatever origin, destination, dates, language, and interests are in the email.
 - **Target resolution:** 1920x1080 (projector)
 
 ## Important Rules
-- **Resilience:** Every agent has a try/catch with fallback mock data. App MUST NOT break.
-- **Dynamic:** Accepts any email, any language, any destination. Pipeline adapts.
-- **No fake delays:** All timing is from real API calls. No artificial setTimeouts.
-- **LIVE badges:** Results from real APIs show a green "LIVE" badge; mock data does not.
-- **Streaming:** All status updates push via SSE immediately. UI feels alive.
-- **Parallel:** Flight, Hotel, Research, Places agents run simultaneously.
-- **Human-in-the-loop:** User edits analysis, selects flight + hotel, checks places.
-- **Settings-aware:** Composer respects language, tone, signature, greeting, toggles from Settings page.
-- **History:** Processed emails saved to localStorage for the Processed page.
-- **No hardcoded keys:** Everything from .env.local
-- **Budget per-night:** Email analyzer explicitly returns per-night budget, not total.
-- **Design:** Dark navy theme, Linear/Vercel dashboard feel, sidebar + main content layout.
+- **No markdown in emails:** Composer prompt explicitly forbids markdown. stripMarkdown() post-processes output.
+- **Human-in-the-loop:** Every AI output is reviewed before sending. Editor + HTML preview.
+- **Customer recognition:** Returning customers get a banner + personalized compose context.
+- **Follow-up system:** Auto-scheduled follow-ups, AI-generated follow-up emails.
+- **Resilience:** Every agent has try/catch with fallback mock data.
+- **Dynamic:** Accepts any email, any language, any destination.
+- **No fake delays:** All timing from real API calls.
+- **Settings-aware:** Composer respects language, tone, signature, response length, content toggles.
+- **Budget per-night:** Email analyzer explicitly returns per-night budget.
+- **Design:** Dark navy theme, Linear/Vercel dashboard feel.

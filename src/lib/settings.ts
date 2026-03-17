@@ -1,5 +1,6 @@
 /* ================================================================
-   Settings, Profile, Templates, History — all localStorage-backed
+   Settings, Profile, Templates, History, Customers, Follow-ups
+   All localStorage-backed
    ================================================================ */
 
 // ── App Settings ──────────────────────────────────────────────────
@@ -12,9 +13,15 @@ export interface AppSettings {
   includePriceBreakdown: boolean;
   includeItinerary: boolean;
   includeWeatherInfo: boolean;
+  includeCostBreakdown: boolean;
   maxBudgetTolerance: number;
   preferredAirlines: string[];
   hotelMinRating: number;
+  aiReviewMode: 'manual' | 'auto';
+  autoFollowUp: boolean;
+  followUpDays: number;
+  customerRecognition: boolean;
+  responseLength: 'concise' | 'standard' | 'detailed';
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -25,9 +32,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
   includePriceBreakdown: true,
   includeItinerary: true,
   includeWeatherInfo: false,
+  includeCostBreakdown: true,
   maxBudgetTolerance: 20,
   preferredAirlines: [],
   hotelMinRating: 7.5,
+  aiReviewMode: 'manual',
+  autoFollowUp: true,
+  followUpDays: 3,
+  customerRecognition: true,
+  responseLength: 'standard',
 };
 
 export function loadSettings(): AppSettings {
@@ -151,6 +164,9 @@ export interface ProcessedEmail {
   processedAt: string;
   totalTime: number;
   status: 'completed' | 'failed';
+  composedResponse?: string;
+  customerEmail?: string;
+  customerName?: string;
 }
 
 export function loadHistory(): ProcessedEmail[] {
@@ -165,8 +181,104 @@ export function loadHistory(): ProcessedEmail[] {
 export function addToHistory(entry: ProcessedEmail): void {
   const history = loadHistory();
   history.unshift(entry);
-  if (history.length > 50) history.pop();
+  if (history.length > 100) history.pop();
   localStorage.setItem('ta-history', JSON.stringify(history));
+}
+
+// ── Known Customers ───────────────────────────────────────────────
+
+export interface KnownCustomer {
+  email: string;
+  name: string;
+  tags: string[];
+  notes: string;
+  trips: { destination: string; date: string; hotel?: string; budget?: string }[];
+  preferredLanguage: string;
+  preferredTone: string;
+  lastContact: string;
+}
+
+export function loadCustomers(): KnownCustomer[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const s = localStorage.getItem('ta-customers');
+    if (s) return JSON.parse(s);
+  } catch { /* ignore */ }
+  return [];
+}
+
+export function saveCustomers(customers: KnownCustomer[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('ta-customers', JSON.stringify(customers));
+}
+
+export function findCustomerByEmail(email: string): KnownCustomer | null {
+  const customers = loadCustomers();
+  const lower = email.toLowerCase();
+  return customers.find(c => c.email.toLowerCase() === lower) || null;
+}
+
+export function upsertCustomer(data: {
+  email: string; name: string; destination: string;
+  hotel?: string; budget?: string; language?: string;
+}): void {
+  const customers = loadCustomers();
+  const idx = customers.findIndex(c => c.email.toLowerCase() === data.email.toLowerCase());
+  const now = new Date().toISOString();
+  if (idx >= 0) {
+    customers[idx].name = data.name || customers[idx].name;
+    customers[idx].lastContact = now;
+    customers[idx].trips.push({ destination: data.destination, date: now, hotel: data.hotel, budget: data.budget });
+    if (data.language) customers[idx].preferredLanguage = data.language;
+  } else {
+    customers.push({
+      email: data.email, name: data.name, tags: [], notes: '',
+      trips: [{ destination: data.destination, date: now, hotel: data.hotel, budget: data.budget }],
+      preferredLanguage: data.language || 'en', preferredTone: 'professional',
+      lastContact: now,
+    });
+  }
+  saveCustomers(customers);
+}
+
+// ── Follow-ups ────────────────────────────────────────────────────
+
+export interface FollowUp {
+  id: string;
+  customerEmail: string;
+  customerName: string;
+  destination: string;
+  originalResponse: string;
+  scheduledDate: string;
+  status: 'pending' | 'sent' | 'cancelled';
+  processedEmailId: string;
+  createdAt: string;
+}
+
+export function loadFollowUps(): FollowUp[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const s = localStorage.getItem('ta-followups');
+    if (s) return JSON.parse(s);
+  } catch { /* ignore */ }
+  return [];
+}
+
+export function saveFollowUps(followUps: FollowUp[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('ta-followups', JSON.stringify(followUps));
+}
+
+export function addFollowUp(entry: Omit<FollowUp, 'id' | 'createdAt'>): void {
+  const list = loadFollowUps();
+  list.push({ ...entry, id: Date.now().toString(), createdAt: new Date().toISOString() });
+  saveFollowUps(list);
+}
+
+export function updateFollowUp(id: string, updates: Partial<FollowUp>): void {
+  const list = loadFollowUps();
+  const idx = list.findIndex(f => f.id === id);
+  if (idx >= 0) { list[idx] = { ...list[idx], ...updates }; saveFollowUps(list); }
 }
 
 // ── Language Labels ───────────────────────────────────────────────
