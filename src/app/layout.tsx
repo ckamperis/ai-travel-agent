@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Sidebar from "@/components/Sidebar";
+import { ToastProvider } from "@/components/Toast";
 
 export const metadata: Metadata = {
-  title: "AI Travel Agent | Afea Travel",
-  description: "Agentic AI travel assistant demo — multiple AI agents collaborating in real-time",
+  title: "TravelAgent AI | Smart Email Assistant for Travel Agencies",
+  description:
+    "AI-powered email assistant that handles travel inquiries in seconds",
 };
 
 export default function RootLayout({
@@ -12,9 +15,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="el">
+    <html lang="en">
       <body className="min-h-screen antialiased">
-        {children}
+        <ToastProvider>
+          <div className="flex h-screen overflow-hidden">
+            <Sidebar />
+            <main className="flex-1 overflow-y-auto">{children}</main>
+          </div>
+        </ToastProvider>
       </body>
     </html>
   );

@@ -37,6 +37,9 @@ export async function analyzeEmail(emailText: string): Promise<EmailAnalysis> {
           content: `You are a travel email analyzer. Extract structured information from customer emails.
 Today's date is ${new Date().toISOString().split("T")[0]}.
 When the email says "next week", calculate the actual dates from today.
+
+IMPORTANT: Budget values should be PER NIGHT, not total trip cost. If the customer says '120-150€/night', return min:120, max:150.
+
 Respond ONLY with valid JSON matching this exact schema:
 {
   "origin": "city name",
@@ -45,7 +48,7 @@ Respond ONLY with valid JSON matching this exact schema:
   "destinationIATA": "3-letter IATA airport code",
   "dates": { "start": "YYYY-MM-DD", "end": "YYYY-MM-DD", "duration": number },
   "travelers": { "adults": number, "children": number, "names": ["string"] },
-  "budget": { "min": number, "max": number, "currency": "EUR" },
+  "budget": { "min": number (per night), "max": number (per night), "currency": "EUR" },
   "interests": ["string"],
   "language": "detected language code (e.g. en, de)",
   "specialRequests": ["specific request strings"]

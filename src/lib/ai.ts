@@ -17,6 +17,26 @@ export interface EmailAnalysis {
   requests: string[];
 }
 
+export interface ComposeSettings {
+  responseLanguage?: string;
+  tone?: string;
+  emailSignature?: string;
+  defaultGreeting?: string;
+  includePriceBreakdown?: boolean;
+  includeItinerary?: boolean;
+  includeWeatherInfo?: boolean;
+  includedPlaces?: string[];
+}
+
+const LANGUAGE_MAP: Record<string, string> = {
+  en: "English",
+  de: "German",
+  el: "Greek",
+  fr: "French",
+  it: "Italian",
+  es: "Spanish",
+};
+
 export async function analyzeEmail(emailText: string): Promise<EmailAnalysis> {
   const client = getClient();
 
@@ -94,7 +114,8 @@ export async function* composeEmail(
     research: string;
     places: unknown[];
   },
-  originalEmail: string
+  originalEmail: string,
+  settings?: ComposeSettings
 ): AsyncGenerator<string> {
   const client = getClient();
 
@@ -107,6 +128,56 @@ export async function* composeEmail(
   if (allResults.selectedHotel) {
     selectionInstructions.push(
       `RECOMMENDED HOTEL (present this as your primary recommendation):\n${JSON.stringify(allResults.selectedHotel, null, 2)}`
+    );
+  }
+
+  // Build language instruction
+  let languageInstruction: string;
+  if (settings?.responseLanguage && LANGUAGE_MAP[settings.responseLanguage]) {
+    languageInstruction = `Write in ${LANGUAGE_MAP[settings.responseLanguage]}`;
+  } else if (settings?.responseLanguage) {
+    languageInstruction = `Write in ${settings.responseLanguage}`;
+  } else {
+    languageInstruction = "Write in the same language the customer used in their email";
+  }
+
+  // Build additional settings instructions
+  const settingsInstructions: string[] = [];
+
+  if (settings?.tone) {
+    settingsInstructions.push(`Tone: ${settings.tone}`);
+  }
+
+  if (settings?.emailSignature) {
+    settingsInstructions.push(`SIGN OFF WITH:\n${settings.emailSignature}`);
+  }
+
+  if (settings?.defaultGreeting) {
+    settingsInstructions.push(`Start with: "${settings.defaultGreeting}"`);
+  }
+
+  if (settings?.includePriceBreakdown === false) {
+    settingsInstructions.push("Do not include detailed price breakdowns");
+  }
+
+  if (settings?.includeItinerary === false) {
+    settingsInstructions.push("Briefly mention itinerary highlights only, skip the full day-by-day");
+  }
+
+  if (settings?.includeWeatherInfo === true) {
+    settingsInstructions.push("Include a brief note about expected weather at the destination");
+  }
+
+  const settingsBlock = settingsInstructions.length > 0
+    ? `\n${settingsInstructions.join("\n")}`
+    : "";
+
+  // Filter places if includedPlaces is specified
+  let placesData = allResults.places;
+  if (settings?.includedPlaces && settings.includedPlaces.length > 0) {
+    const includedSet = new Set(settings.includedPlaces);
+    placesData = (allResults.places as Array<{ name: string; [key: string]: unknown }>).filter(
+      (p) => includedSet.has(p.name)
     );
   }
 
@@ -125,8 +196,8 @@ Write a warm, detailed, and well-organized response that:
 - Includes the travel itinerary highlights
 - Mentions recommended restaurants and places
 - Ends with a professional closing and next steps
-- Write in the same language the customer used in their email
-- Use clean formatting with sections and bullet points`,
+- ${languageInstruction}
+- Use clean formatting with sections and bullet points${settingsBlock}`,
       },
       {
         role: "user",
@@ -146,7 +217,7 @@ Travel research & itinerary:
 ${allResults.research}
 
 Recommended places:
-${JSON.stringify(allResults.places, null, 2)}
+${JSON.stringify(placesData, null, 2)}
 
 Compose a complete, professional response email from Afea Travel to the customer.`,
       },

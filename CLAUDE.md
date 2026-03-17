@@ -1,9 +1,9 @@
-# AI Travel Agent — Agentic Demo for Tourism Conference
+# TravelAgent AI — SaaS Email Assistant for Travel Agencies
 
-## Project Overview
-An agentic AI travel assistant that demonstrates how multiple AI agents collaborate to handle a customer email inquiry. Built as a live demo for a tourism industry conference presentation.
+## Product Overview
+A product-ready AI-powered email assistant that handles travel inquiries. Multiple AI agents collaborate to analyze customer emails, search flights/hotels/places, research itineraries, and compose professional responses — all in real-time.
 
-**Concept: "Your AI Employee"** — Show that this system can handle ANY real travel inquiry in real-time, not a pre-scripted demo. A text area accepts any customer email, AI agents process it live, the user reviews and selects options, then AI composes a professional response.
+**Concept: "Your AI Employee"** — A working SaaS tool (not a demo) with sidebar navigation, settings, templates, agent configuration, and a step-by-step wizard for processing any customer email in any language.
 
 ## Architecture
 
@@ -59,28 +59,27 @@ ai-travel-agent/
 ├── public/
 ├── src/
 │   ├── app/
-│   │   ├── layout.tsx
-│   │   ├── page.tsx                  # Main demo UI
+│   │   ├── layout.tsx                # Root layout with sidebar + toast
+│   │   ├── page.tsx                  # Inbox — step wizard (main flow)
+│   │   ├── settings/page.tsx         # Settings page
+│   │   ├── agents/page.tsx           # Agent configuration
+│   │   ├── templates/page.tsx        # Email templates CRUD
+│   │   ├── profile/page.tsx          # Profile settings
+│   │   ├── processed/page.tsx        # Processed emails history
 │   │   └── api/
-│   │       ├── orchestrate/
-│   │       │   └── route.ts          # SSE endpoint — analysis + agents
-│   │       └── compose/
-│   │           └── route.ts          # SSE endpoint — compose with selections
-│   ├── agents/
-│   │   ├── types.ts                  # Shared types for all agents
-│   │   ├── orchestrator.ts           # Main orchestrator logic
-│   │   ├── email-analyzer.ts         # Parses & extracts intent from email
-│   │   ├── flight-agent.ts           # Duffel API flight search
-│   │   ├── hotel-agent.ts            # Mock hotel data
-│   │   ├── research-agent.ts         # GPT-4o itinerary generation
-│   │   ├── places-agent.ts           # Google Places for restaurants, sights
-│   │   └── composer-agent.ts         # GPT-4o — composes final email
+│   │       ├── orchestrate/route.ts  # SSE: analyze + agents (mode: full|analyze|search)
+│   │       └── compose/route.ts      # SSE: compose with selections + settings
+│   ├── agents/                       # (unchanged from before)
+│   ├── components/
+│   │   ├── Sidebar.tsx               # Navigation sidebar
+│   │   ├── Breadcrumb.tsx            # Breadcrumb navigation
+│   │   └── Toast.tsx                 # Toast notification system
 │   ├── lib/
+│   │   ├── settings.ts              # Settings, Profile, Templates, History + localStorage
+│   │   ├── ai.ts                     # OpenAI API helper (with compose settings)
 │   │   ├── duffel.ts                 # Duffel API client
 │   │   ├── google-places.ts          # Google Places API client
-│   │   ├── ai.ts                     # OpenAI API helper
 │   │   └── mock-hotels.ts            # Curated Athens hotel data
-│   └── (all UI inlined in page.tsx — no separate components)
 ```
 
 ## Agent Definitions
@@ -131,38 +130,53 @@ ai-travel-agent/
 - **Selection-aware:** Highlights user's chosen flight/hotel as recommendations
 
 ## SSE Event Format
-### /api/orchestrate — analysis + 4 agents
+### /api/orchestrate — analysis + agents
+Accepts: `{ email: string, mode?: 'full'|'analyze'|'search', analysis?: EmailAnalysis }`
+- `mode: 'analyze'` — run email analysis only
+- `mode: 'search'` — skip analysis, run 4 agents with provided analysis
+- `mode: 'full'` — run both (default)
+
 ```typescript
 type AgentEvent = {
   agent: 'email' | 'flight' | 'hotel' | 'research' | 'places';
   status: 'started' | 'done' | 'error';
   message: string;
-  data?: any;              // Results when done
+  data?: any;
   source?: 'live' | 'mock';
   timestamp: number;
 }
 ```
 
 ### /api/compose — streaming email composition
+Accepts: `{ email, emailAnalysis, selectedFlight, selectedHotel, flights, hotels, research, places, includedPlaces?, settings? }`
+Settings: `{ responseLanguage, tone, emailSignature, defaultGreeting, includePriceBreakdown, includeItinerary, includeWeatherInfo }`
+
 ```typescript
 // Each SSE line: data: {"chunk": "partial text"}
 // Final line:    data: [DONE]
 ```
 
-## UI Flow / Phases
-1. **input** — Text area pre-filled with demo email, "Process Email" button
-   - User can paste ANY email in any language
-2. **processing** — Text area locks, Agent Pipeline section appears:
-   - Email Analysis with extracted key-value data
-   - 4-column grid (Flights, Hotels, Research, Places) with live status
-   - Each column: spinner → API info → results + elapsed time + LIVE badge
-3. **review** — "Review & Select" section auto-appears when all agents done
-   - Flights: clickable table rows (first pre-selected)
-   - Hotels: clickable cards (first pre-selected)
-   - "Compose Response" button
-4. **composing** — GPT-4o streams response email token by token
-   - Incorporates user's flight & hotel selections
-5. **done** — "Response Ready" with copy button, total time, "New Email" reset
+## UI Layout
+- **Sidebar** (always visible): Logo, nav menu (Inbox, Processed, Settings, Agents, Templates, Profile), notification bell, user avatar
+- **Main Content**: route-based pages
+
+## Inbox Step Wizard (main flow)
+1. **Step 1 — Email Input**: Sample inbox with 3 pre-loaded emails (Greece, Rome, Santorini) + "Paste custom email" option
+2. **Step 2 — Analysis**: Editable form with all extracted fields (origin, destination, dates, travelers, budget, interests, language). User can modify before searching. "Confirm & Search" button.
+3. **Step 3 — Results**: 4 tabs (Flights, Hotels, Itinerary, Places):
+   - Flights: sortable table (price/duration/stops), radio selection
+   - Hotels: cards with radio selection, amenities, metro info
+   - Itinerary: collapsible day-by-day sections
+   - Places: checkboxes to include/exclude from final email, Google Maps links
+   - "Compose Response" button (enabled when all agents done)
+4. **Step 4 — Compose**: Streaming email on left, selected options summary on right. Editable after streaming. Send + Copy + New Email buttons. Saves to history.
+
+## Other Pages
+- **Settings**: Response language, tone, email signature, greeting, toggles (price breakdown, itinerary, weather), budget tolerance slider, hotel min rating slider
+- **Agents**: 5 agent cards with status dots (connected/mock/not configured), enable/disable toggles
+- **Templates**: CRUD for email templates with variable placeholders ({{guest_name}}, {{flight_details}}, etc.)
+- **Profile**: Agency name, agent name, email
+- **Processed**: History table from localStorage
 
 ## Duffel API Reference
 - **Base URL:** https://api.duffel.com
@@ -312,13 +326,15 @@ whatever origin, destination, dates, language, and interests are in the email.
 - **Target resolution:** 1920x1080 (projector)
 
 ## Important Rules
-- **Resilience:** Every agent has a try/catch with fallback mock data. Demo MUST NOT break.
+- **Resilience:** Every agent has a try/catch with fallback mock data. App MUST NOT break.
 - **Dynamic:** Accepts any email, any language, any destination. Pipeline adapts.
 - **No fake delays:** All timing is from real API calls. No artificial setTimeouts.
 - **LIVE badges:** Results from real APIs show a green "LIVE" badge; mock data does not.
 - **Streaming:** All status updates push via SSE immediately. UI feels alive.
 - **Parallel:** Flight, Hotel, Research, Places agents run simultaneously.
-- **Human-in-the-loop:** User selects flight + hotel before compose step.
+- **Human-in-the-loop:** User edits analysis, selects flight + hotel, checks places.
+- **Settings-aware:** Composer respects language, tone, signature, greeting, toggles from Settings page.
+- **History:** Processed emails saved to localStorage for the Processed page.
 - **No hardcoded keys:** Everything from .env.local
-- **English UI labels:** Clean, professional labels for international conference audience.
-- **Projector-optimized:** Min 16px body, 24px+ headers, dark navy theme, 1920x1080.
+- **Budget per-night:** Email analyzer explicitly returns per-night budget, not total.
+- **Design:** Dark navy theme, Linear/Vercel dashboard feel, sidebar + main content layout.

@@ -1,11 +1,23 @@
 import { composeEmail } from "@/lib/ai";
 import { AllAgentResults, FlightResult, HotelResult } from "./types";
 
+export interface ComposerSettings {
+  responseLanguage?: string;
+  tone?: string;
+  emailSignature?: string;
+  defaultGreeting?: string;
+  includePriceBreakdown?: boolean;
+  includeItinerary?: boolean;
+  includeWeatherInfo?: boolean;
+  includedPlaces?: string[];
+}
+
 export async function* composeResponse(
   results: AllAgentResults,
   originalEmail: string,
   selectedFlight?: FlightResult,
   selectedHotel?: HotelResult,
+  composerSettings?: ComposerSettings,
 ): AsyncGenerator<string> {
   try {
     const libAnalysis = {
@@ -23,7 +35,8 @@ export async function* composeResponse(
         research: results.research,
         places: results.places,
       },
-      originalEmail
+      originalEmail,
+      composerSettings
     );
 
     for await (const chunk of stream) {

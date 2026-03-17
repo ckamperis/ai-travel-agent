@@ -3,6 +3,8 @@ import { orchestrate } from "@/agents/orchestrator";
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const emailText = body.email;
+  const mode = body.mode || 'full';
+  const analysis = body.analysis;
 
   if (!emailText || typeof emailText !== "string") {
     return new Response(
@@ -16,7 +18,7 @@ export async function POST(request: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        for await (const event of orchestrate(emailText)) {
+        for await (const event of orchestrate(emailText, mode, analysis)) {
           const data = JSON.stringify(event);
           controller.enqueue(encoder.encode(`data: ${data}\n\n`));
         }

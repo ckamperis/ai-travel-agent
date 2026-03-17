@@ -2,43 +2,37 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
-  Plane,
-  Building2,
-  Search,
-  MapPin,
-  Loader2,
-  CheckCircle,
-  AlertCircle,
-  Copy,
-  Check,
-  Clock,
-  Zap,
-  ArrowRight,
-  RotateCcw,
-  Radio,
-  Star,
-  TrainFront,
-  Send,
-  PenTool,
-  Mail,
+  Plane, Building2, Search, MapPin, Loader2, CheckCircle, AlertCircle,
+  Copy, Check, Clock, ArrowRight, ArrowLeft, Radio, Star, TrainFront,
+  Send, PenTool, Mail, RotateCcw, ChevronDown, ChevronUp, X, Plus,
+  ExternalLink,
 } from 'lucide-react';
-import type {
-  EmailAnalysis,
-  FlightResult,
-  HotelResult,
-  PlaceResult,
-} from '@/agents/types';
+import type { EmailAnalysis, FlightResult, HotelResult, PlaceResult } from '@/agents/types';
+import Breadcrumb from '@/components/Breadcrumb';
+import { useToast } from '@/components/Toast';
+import {
+  loadSettings, type AppSettings,
+  loadProfile, type Profile,
+  addToHistory,
+} from '@/lib/settings';
 
 /* ================================================================
-   Constants
+   Sample Emails
    ================================================================ */
 
-const DEMO_EMAIL = `Guten Tag,
+const SAMPLE_EMAILS = [
+  {
+    id: 'greece',
+    from: 'klaus.mueller@gmail.com',
+    subject: 'Trip to Greece — 7 days',
+    preview: 'We are Klaus and Anna Mueller from Hamburg, planning a trip to Greece...',
+    date: '2 hours ago',
+    body: `Guten Tag,
 
 We are Klaus and Anna Mueller from Hamburg, Germany. We are planning a trip to Greece for next week (7 days) and we are looking for:
 
 - Flights from Hamburg to Athens (arriving Monday morning if possible)
-- A nice hotel in central Athens, close to metro, mid-range budget (~120-150\u20AC/night)
+- A nice hotel in central Athens, close to metro, mid-range budget (~120-150€/night)
 - A complete travel plan: what to see, where to eat, day trips from Athens
 - We love history, local food, and walking around neighborhoods
 - We would also like to visit one island for 2 days if possible
@@ -46,170 +40,119 @@ We are Klaus and Anna Mueller from Hamburg, Germany. We are planning a trip to G
 Could you please help us organize everything?
 
 Best regards,
-Klaus & Anna Mueller`;
+Klaus & Anna Mueller`,
+  },
+  {
+    id: 'rome',
+    from: 'sarah.johnson@outlook.com',
+    subject: 'Family vacation to Rome — 5 days',
+    preview: 'Hi! Our family of 4 is looking for a Rome trip next month...',
+    date: '5 hours ago',
+    body: `Hi there!
 
-type Phase = 'input' | 'processing' | 'review' | 'composing' | 'done';
-type Status = 'idle' | 'active' | 'done' | 'error';
+We're the Johnson family — myself, my husband Tom, and our two kids (ages 8 and 12). We'd love to plan a 5-day trip to Rome next month.
+
+What we need:
+- Flights from London Heathrow to Rome (flexible on dates)
+- A family-friendly hotel near the Vatican area, budget around 130-180€/night
+- Kid-friendly activities and restaurant suggestions
+- We want to see the Colosseum, Vatican, and Trevi Fountain
+- Any tips for traveling with kids in Rome?
+
+Thank you so much!
+Sarah Johnson`,
+  },
+  {
+    id: 'santorini',
+    from: 'marie.dupont@gmail.com',
+    subject: 'Lune de miel à Santorin',
+    preview: 'Bonjour, mon mari et moi souhaitons organiser notre lune de miel...',
+    date: 'Yesterday',
+    body: `Bonjour,
+
+Mon mari et moi souhaitons organiser notre lune de miel à Santorin pour la semaine prochaine (5 jours).
+
+Nous recherchons:
+- Des vols depuis Paris CDG vers Santorin
+- Un hôtel romantique avec vue sur la caldeira à Oia ou Fira, budget 200-300€/nuit
+- Les meilleurs restaurants pour un dîner romantique
+- Les couchers de soleil à ne pas manquer
+- Excursion en bateau recommandée
+
+Merci beaucoup!
+Marie & Pierre Dupont`,
+  },
+];
 
 /* ================================================================
-   Helpers
+   Types & Helpers
    ================================================================ */
 
-function fmtTime(ms: number): string {
-  return `${(ms / 1000).toFixed(1)}s`;
+type Step = 1 | 2 | 3 | 4;
+
+interface EditableAnalysis {
+  origin: string; originIATA: string;
+  destination: string; destinationIATA: string;
+  startDate: string; endDate: string; duration: number;
+  adults: number; children: number;
+  budgetMin: number; budgetMax: number; currency: string;
+  interests: string[]; language: string;
+  specialRequests: string[];
 }
 
-function fmtDate(d: string): string {
-  try {
-    return new Date(d).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-    });
-  } catch {
-    return d;
-  }
+function toEditable(a: EmailAnalysis): EditableAnalysis {
+  return {
+    origin: a.origin, originIATA: a.originIATA,
+    destination: a.destination, destinationIATA: a.destinationIATA,
+    startDate: a.dates.start, endDate: a.dates.end, duration: a.dates.duration,
+    adults: a.travelers.adults, children: a.travelers.children,
+    budgetMin: a.budget.min, budgetMax: a.budget.max, currency: a.budget.currency,
+    interests: [...a.interests], language: a.language,
+    specialRequests: [...a.specialRequests],
+  };
 }
 
-function fmtClock(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
-  } catch {
-    return iso;
-  }
+function toAnalysis(e: EditableAnalysis): EmailAnalysis {
+  return {
+    origin: e.origin, originIATA: e.originIATA,
+    destination: e.destination, destinationIATA: e.destinationIATA,
+    dates: { start: e.startDate, end: e.endDate, duration: e.duration },
+    travelers: { adults: e.adults, children: e.children, names: [] },
+    budget: { min: e.budgetMin, max: e.budgetMax, currency: e.currency },
+    interests: e.interests, language: e.language,
+    specialRequests: e.specialRequests,
+  };
 }
 
-function parseResearchDays(text: string): { day: string; desc: string }[] {
-  const lines = text.split('\n').filter((l) => l.trim());
+function fmtTime(ms: number) { return `${(ms / 1000).toFixed(1)}s`; }
+function fmtClock(iso: string) {
+  try { return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }); }
+  catch { return iso; }
+}
+
+function parseResearchDays(text: string) {
+  const lines = text.split('\n').filter(l => l.trim());
   const days: { day: string; desc: string }[] = [];
-  let cur = '';
-  let desc = '';
+  let cur = '', desc = '';
   for (const line of lines) {
-    const m = line.match(/\*?\*?(?:Day|Ημέρα|Tag)\s*(\d+)/i);
-    if (m) {
-      if (cur) days.push({ day: cur, desc: desc.trim() });
-      cur = `Day ${m[1]}`;
-      desc = line.replace(/^[\s*]*(?:Day|Ημέρα|Tag)\s*\d+[^a-zA-Z]*/i, '');
-    } else if (cur) {
-      desc += ' ' + line;
-    }
+    const m = line.match(/\*?\*?(?:Day|Ημέρα|Tag|Jour)\s*(\d+)/i);
+    if (m) { if (cur) days.push({ day: cur, desc: desc.trim() }); cur = `Day ${m[1]}`; desc = line.replace(/^[\s*]*(?:Day|Ημέρα|Tag|Jour)\s*\d+[^a-zA-Z]*/i, ''); }
+    else if (cur) desc += ' ' + line;
   }
   if (cur) days.push({ day: cur, desc: desc.trim() });
   return days;
 }
 
-/* ================================================================
-   LiveBadge
-   ================================================================ */
+type AgentStatus = 'idle' | 'active' | 'done' | 'error';
+
+const INPUT_CLS = 'w-full rounded-lg border border-card-border bg-navy-deep/50 px-4 py-2.5 text-sm text-foreground/80 outline-none focus:border-teal/50 focus:ring-1 focus:ring-teal/20';
 
 function LiveBadge({ source }: { source?: 'live' | 'mock' }) {
   if (source !== 'live') return null;
   return (
     <span className="inline-flex items-center gap-1 rounded bg-green/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-green">
-      <Radio size={8} className="animate-pulse" />
-      Live
+      <Radio size={8} className="animate-pulse" />Live
     </span>
-  );
-}
-
-/* ================================================================
-   AgentColumn — one of the 4 parallel-agent columns
-   ================================================================ */
-
-function AgentColumn({
-  name,
-  icon,
-  color,
-  status,
-  message,
-  time,
-  source,
-  children,
-}: {
-  name: string;
-  icon: React.ReactNode;
-  color: string;
-  status: Status;
-  message?: string;
-  time?: number;
-  source?: 'live' | 'mock';
-  children?: React.ReactNode;
-}) {
-  return (
-    <div
-      className="glass-card flex flex-col p-4 transition-all duration-500"
-      style={{
-        borderColor:
-          status === 'active'
-            ? `${color}40`
-            : status === 'done'
-              ? `${color}20`
-              : undefined,
-      }}
-    >
-      {/* Header */}
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span
-            style={{
-              color: status === 'idle' ? `${color}60` : color,
-            }}
-          >
-            {icon}
-          </span>
-          <span
-            className="text-xs font-semibold uppercase tracking-wider"
-            style={{
-              color: status === 'idle' ? `${color}80` : color,
-            }}
-          >
-            {name}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          {status === 'done' && <LiveBadge source={source} />}
-          {status === 'active' && (
-            <Loader2 size={14} className="animate-spin" style={{ color }} />
-          )}
-          {status === 'done' && (
-            <CheckCircle
-              size={14}
-              className="animate-scale-in"
-              style={{ color }}
-            />
-          )}
-          {status === 'error' && <AlertCircle size={14} className="text-red-400" />}
-        </div>
-      </div>
-
-      {/* API info */}
-      {message && status !== 'idle' && (
-        <p className="mb-2 truncate text-[11px] text-foreground/30">{message}</p>
-      )}
-
-      {/* Time */}
-      {time != null && status === 'done' && (
-        <div className="mb-3 flex items-center gap-1 text-[10px] text-foreground/25">
-          <Clock size={10} />
-          {fmtTime(time)}
-        </div>
-      )}
-
-      {/* Results or skeleton */}
-      <div className="mt-auto">
-        {status === 'done' && children}
-        {status === 'active' && (
-          <div className="space-y-2">
-            <div className="h-3 w-3/4 rounded bg-foreground/[0.04] animate-pulse" />
-            <div className="h-3 w-1/2 rounded bg-foreground/[0.04] animate-pulse" />
-            <div className="h-3 w-2/3 rounded bg-foreground/[0.04] animate-pulse" />
-          </div>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -217,104 +160,83 @@ function AgentColumn({
    Main Component
    ================================================================ */
 
-export default function Home() {
-  /* ---- State ---- */
-  const [phase, setPhase] = useState<Phase>('input');
-  const [emailText, setEmailText] = useState(DEMO_EMAIL);
+export default function InboxPage() {
+  const { addToast } = useToast();
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
 
-  // Analysis
+  useEffect(() => { setSettings(loadSettings()); setProfile(loadProfile()); }, []);
+
+  // Step wizard
+  const [step, setStep] = useState<Step>(1);
+  const [emailText, setEmailText] = useState('');
+  const [showPaste, setShowPaste] = useState(false);
+
+  // Step 2: analysis
   const [analysis, setAnalysis] = useState<EmailAnalysis | null>(null);
-  const [analysisStatus, setAnalysisStatus] = useState<Status>('idle');
-  const [analysisTime, setAnalysisTime] = useState(0);
+  const [edited, setEdited] = useState<EditableAnalysis | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisSource, setAnalysisSource] = useState<'live' | 'mock'>('mock');
+  const [analysisTime, setAnalysisTime] = useState(0);
 
-  // Parallel agents
-  const [agentStatuses, setAgentStatuses] = useState<Record<string, Status>>({
-    flight: 'idle',
-    hotel: 'idle',
-    research: 'idle',
-    places: 'idle',
-  });
-  const [agentMessages, setAgentMessages] = useState<Record<string, string>>({});
-  const [agentTimes, setAgentTimes] = useState<Record<string, number>>({});
-  const [agentSources, setAgentSources] = useState<Record<string, 'live' | 'mock'>>({});
-
-  // Results
+  // Step 3: results
+  const [activeTab, setActiveTab] = useState<'flights' | 'hotels' | 'itinerary' | 'places'>('flights');
   const [flights, setFlights] = useState<FlightResult[]>([]);
   const [hotels, setHotels] = useState<HotelResult[]>([]);
   const [research, setResearch] = useState('');
   const [places, setPlaces] = useState<PlaceResult[]>([]);
-
-  // Selection
   const [selectedFlightIdx, setSelectedFlightIdx] = useState(0);
   const [selectedHotelIdx, setSelectedHotelIdx] = useState(0);
+  const [includedPlaces, setIncludedPlaces] = useState<Set<string>>(new Set());
+  const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentStatus>>({});
+  const [agentTimes, setAgentTimes] = useState<Record<string, number>>({});
+  const [agentSources, setAgentSources] = useState<Record<string, 'live' | 'mock'>>({});
+  const [agentMessages, setAgentMessages] = useState<Record<string, string>>({});
+  const [expandedDays, setExpandedDays] = useState<Set<number>>(new Set());
+  const [flightSort, setFlightSort] = useState<'price' | 'duration' | 'stops'>('price');
 
-  // Compose
+  // Step 4: compose
   const [composedEmail, setComposedEmail] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-
-  // Meta
+  const [isEditing, setIsEditing] = useState(false);
   const [totalTime, setTotalTime] = useState(0);
   const [copied, setCopied] = useState(false);
 
-  // Refs
   const startTimeRef = useRef(0);
   const agentStartRef = useRef<Record<string, number>>({});
-  const pipelineRef = useRef<HTMLDivElement>(null);
-  const reviewRef = useRef<HTMLDivElement>(null);
-  const composeRef = useRef<HTMLDivElement>(null);
   const completedRef = useRef(0);
 
-  /* ---- Auto-scroll on phase change ---- */
-  useEffect(() => {
-    const scroll = (ref: React.RefObject<HTMLDivElement | null>) =>
-      setTimeout(
-        () => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
-        120
-      );
-    if (phase === 'review') scroll(reviewRef);
-    if (phase === 'composing' || phase === 'done') scroll(composeRef);
-  }, [phase]);
+  // New interest input
+  const [newInterest, setNewInterest] = useState('');
 
-  /* ---- Process email (orchestrate SSE) ---- */
-  const processEmail = useCallback(async () => {
-    setPhase('processing');
+  /* ---- Breadcrumb ---- */
+  const breadcrumbs = [
+    { label: 'Inbox', onClick: step > 1 ? () => handleReset() : undefined },
+    ...(step >= 2 ? [{ label: step === 2 ? 'Analysis' : step === 3 ? 'Results' : 'Compose' }] : []),
+  ];
+
+  /* ---- Step 1 → 2: Analyze email ---- */
+  const analyzeEmail = useCallback(async (text: string) => {
+    setEmailText(text);
+    setStep(2);
+    setAnalysisLoading(true);
     startTimeRef.current = Date.now();
-    completedRef.current = 0;
-    setAnalysis(null);
-    setAnalysisStatus('active');
-    setAnalysisTime(0);
-    setAnalysisSource('mock');
-    setAgentStatuses({ flight: 'idle', hotel: 'idle', research: 'idle', places: 'idle' });
-    setAgentMessages({});
-    setAgentTimes({});
-    setAgentSources({});
-    setFlights([]);
-    setHotels([]);
-    setResearch('');
-    setPlaces([]);
-    setSelectedFlightIdx(0);
-    setSelectedHotelIdx(0);
-    setComposedEmail('');
-    setCopied(false);
 
     try {
       const res = await fetch('/api/orchestrate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailText }),
+        body: JSON.stringify({ email: text, mode: 'analyze' }),
       });
-      if (!res.ok || !res.body) throw new Error('SSE connection failed');
+      if (!res.ok || !res.body) throw new Error('Analysis failed');
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let done = false;
 
-      while (!done) {
-        const { done: streamDone, value } = await reader.read();
-        if (streamDone) { done = true; break; }
-
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
@@ -322,77 +244,111 @@ export default function Home() {
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const payload = line.slice(6).trim();
-          if (payload === '[DONE]') { done = true; break; }
+          if (payload === '[DONE]') continue;
+          try {
+            const ev = JSON.parse(payload);
+            if (ev.agent === 'email' && ev.status === 'done' && ev.data) {
+              const a = ev.data as EmailAnalysis;
+              setAnalysis(a);
+              setEdited(toEditable(a));
+              setAnalysisSource(ev.source || 'mock');
+              setAnalysisTime(Date.now() - startTimeRef.current);
+              addToast('Email analyzed successfully', 'success');
+            }
+          } catch { /* skip */ }
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      addToast('Email analysis failed', 'error');
+    } finally {
+      setAnalysisLoading(false);
+    }
+  }, [addToast]);
 
+  /* ---- Step 2 → 3: Search with (edited) analysis ---- */
+  const confirmAndSearch = useCallback(async () => {
+    if (!edited) return;
+    const finalAnalysis = toAnalysis(edited);
+    setAnalysis(finalAnalysis);
+    setStep(3);
+    setActiveTab('flights');
+    setFlights([]); setHotels([]); setResearch(''); setPlaces([]);
+    setSelectedFlightIdx(0); setSelectedHotelIdx(0);
+    setIncludedPlaces(new Set());
+    completedRef.current = 0;
+    setAgentStatuses({ flight: 'idle', hotel: 'idle', research: 'idle', places: 'idle' });
+    setAgentTimes({}); setAgentSources({}); setAgentMessages({});
+
+    try {
+      const res = await fetch('/api/orchestrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailText, mode: 'search', analysis: finalAnalysis }),
+      });
+      if (!res.ok || !res.body) throw new Error('Search failed');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6).trim();
+          if (payload === '[DONE]') continue;
           try {
             const ev = JSON.parse(payload);
             const { agent, status, message, data, source } = ev;
+            if (agent === 'email') continue; // skip analysis event
 
-            if (agent === 'email') {
-              if (status === 'started') {
-                agentStartRef.current.email = Date.now();
-                setAnalysisStatus('active');
-              } else if (status === 'done') {
-                setAnalysisStatus('done');
-                setAnalysis(data as EmailAnalysis);
-                setAnalysisTime(Date.now() - (agentStartRef.current.email || Date.now()));
-                if (source) setAnalysisSource(source);
-              } else if (status === 'error') {
-                setAnalysisStatus('error');
+            if (status === 'started') {
+              agentStartRef.current[agent] = Date.now();
+              setAgentStatuses(p => ({ ...p, [agent]: 'active' }));
+              setAgentMessages(p => ({ ...p, [agent]: message }));
+            } else if (status === 'done') {
+              const elapsed = Date.now() - (agentStartRef.current[agent] || Date.now());
+              setAgentStatuses(p => ({ ...p, [agent]: 'done' }));
+              setAgentMessages(p => ({ ...p, [agent]: message }));
+              setAgentTimes(p => ({ ...p, [agent]: elapsed }));
+              if (source) setAgentSources(p => ({ ...p, [agent]: source }));
+
+              if (agent === 'flight') { setFlights((data as FlightResult[]) || []); addToast(`${((data as FlightResult[]) || []).length} flights found`, 'success'); }
+              if (agent === 'hotel') { setHotels((data as HotelResult[]) || []); addToast(`${((data as HotelResult[]) || []).length} hotels found`, 'success'); }
+              if (agent === 'research') { setResearch((data as string) || ''); addToast('Itinerary research complete', 'success'); }
+              if (agent === 'places') {
+                const p = (data as PlaceResult[]) || [];
+                setPlaces(p);
+                setIncludedPlaces(new Set(p.map(pl => pl.name)));
+                addToast(`${p.length} places found`, 'success');
               }
-            } else if (['flight', 'hotel', 'research', 'places'].includes(agent)) {
-              if (status === 'started') {
-                agentStartRef.current[agent] = Date.now();
-                setAgentStatuses((p) => ({ ...p, [agent]: 'active' }));
-                setAgentMessages((p) => ({ ...p, [agent]: message }));
-              } else if (status === 'done') {
-                const elapsed = Date.now() - (agentStartRef.current[agent] || Date.now());
-                setAgentStatuses((p) => ({ ...p, [agent]: 'done' }));
-                setAgentMessages((p) => ({ ...p, [agent]: message }));
-                setAgentTimes((p) => ({ ...p, [agent]: elapsed }));
-                if (source) setAgentSources((p) => ({ ...p, [agent]: source }));
-
-                if (agent === 'flight') setFlights((data as FlightResult[]) || []);
-                if (agent === 'hotel') setHotels((data as HotelResult[]) || []);
-                if (agent === 'research') setResearch((data as string) || '');
-                if (agent === 'places') setPlaces((data as PlaceResult[]) || []);
-
-                completedRef.current++;
-                if (completedRef.current === 4) {
-                  setTimeout(() => setPhase('review'), 400);
-                }
-              } else if (status === 'error') {
-                setAgentStatuses((p) => ({ ...p, [agent]: 'error' }));
-                setAgentMessages((p) => ({ ...p, [agent]: message }));
-                completedRef.current++;
-                if (completedRef.current === 4) {
-                  setTimeout(() => setPhase('review'), 400);
-                }
-              }
+              completedRef.current++;
+            } else if (status === 'error') {
+              setAgentStatuses(p => ({ ...p, [agent]: 'error' }));
+              completedRef.current++;
             }
-          } catch {
-            /* skip unparseable */
-          }
+          } catch { /* skip */ }
         }
       }
-
-      // Safety: transition to review if stream ended early
-      if (completedRef.current > 0 && completedRef.current < 4) {
-        setPhase('review');
-      }
     } catch (err) {
-      console.error('Orchestrate failed:', err);
-      setAnalysisStatus('error');
+      console.error(err);
+      addToast('Agent search failed', 'error');
     }
-  }, [emailText]);
+  }, [edited, emailText, addToast]);
 
-  /* ---- Compose response (separate SSE) ---- */
+  /* ---- Step 3 → 4: Compose ---- */
   const startCompose = useCallback(async () => {
-    setPhase('composing');
+    setStep(4);
     setIsStreaming(true);
     setComposedEmail('');
     setCopied(false);
-
+    setIsEditing(false);
     let text = '';
 
     try {
@@ -404,10 +360,17 @@ export default function Home() {
           emailAnalysis: analysis,
           selectedFlight: flights[selectedFlightIdx] || null,
           selectedHotel: hotels[selectedHotelIdx] || null,
-          flights,
-          hotels,
-          research,
-          places,
+          flights, hotels, research, places,
+          includedPlaces: [...includedPlaces],
+          settings: settings ? {
+            responseLanguage: settings.responseLanguage,
+            tone: settings.tone,
+            emailSignature: settings.emailSignature,
+            defaultGreeting: settings.defaultGreeting,
+            includePriceBreakdown: settings.includePriceBreakdown,
+            includeItinerary: settings.includeItinerary,
+            includeWeatherInfo: settings.includeWeatherInfo,
+          } : undefined,
         }),
       });
       if (!res.ok || !res.body) throw new Error('Compose failed');
@@ -419,687 +382,599 @@ export default function Home() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
-
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const payload = line.slice(6).trim();
           if (payload === '[DONE]') continue;
-
           try {
             const { chunk } = JSON.parse(payload);
-            if (chunk) {
-              text += chunk;
-              setComposedEmail(text);
-            }
-          } catch {
-            /* skip */
-          }
+            if (chunk) { text += chunk; setComposedEmail(text); }
+          } catch { /* skip */ }
         }
       }
-    } catch (err) {
-      console.error('Compose failed:', err);
-      if (!text) {
-        text =
-          'We apologize, but we encountered an issue composing your travel plan. Our team will follow up shortly.\n\nBest regards,\nAfea Travel';
-        setComposedEmail(text);
-      }
+
+      addToast('Response composed — ready to send', 'success');
+    } catch {
+      if (!text) { text = 'We apologize, but we encountered an issue composing your travel plan.\n\nBest regards,\nAfea Travel'; setComposedEmail(text); }
+      addToast('Composition failed', 'error');
     } finally {
       setIsStreaming(false);
-      setTotalTime(Math.round((Date.now() - startTimeRef.current) / 1000));
-      setPhase('done');
+      const total = Math.round((Date.now() - startTimeRef.current) / 1000);
+      setTotalTime(total);
+
+      // Save to history
+      if (analysis) {
+        addToHistory({
+          id: Date.now().toString(),
+          from: emailText.match(/(?:from|von|de)\s*:?\s*([\w.@]+)/i)?.[1] || 'Unknown',
+          subject: `Trip to ${analysis.destination}`,
+          destination: analysis.destination,
+          processedAt: new Date().toISOString(),
+          totalTime: total,
+          status: text.length > 50 ? 'completed' : 'failed',
+        });
+      }
     }
-  }, [emailText, analysis, flights, hotels, research, places, selectedFlightIdx, selectedHotelIdx]);
+  }, [emailText, analysis, flights, hotels, research, places, selectedFlightIdx, selectedHotelIdx, includedPlaces, settings, addToast]);
 
   /* ---- Reset ---- */
-  const reset = useCallback(() => {
-    setPhase('input');
-    setEmailText(DEMO_EMAIL);
-    setAnalysis(null);
-    setAnalysisStatus('idle');
-    setAnalysisTime(0);
-    setAnalysisSource('mock');
-    setAgentStatuses({ flight: 'idle', hotel: 'idle', research: 'idle', places: 'idle' });
-    setAgentMessages({});
-    setAgentTimes({});
-    setAgentSources({});
-    setFlights([]);
-    setHotels([]);
-    setResearch('');
-    setPlaces([]);
-    setSelectedFlightIdx(0);
-    setSelectedHotelIdx(0);
-    setComposedEmail('');
-    setIsStreaming(false);
-    setTotalTime(0);
-    setCopied(false);
+  const handleReset = useCallback(() => {
+    setStep(1); setEmailText(''); setShowPaste(false);
+    setAnalysis(null); setEdited(null); setAnalysisLoading(false);
+    setFlights([]); setHotels([]); setResearch(''); setPlaces([]);
+    setComposedEmail(''); setIsStreaming(false); setTotalTime(0);
     completedRef.current = 0;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   /* ---- Copy ---- */
   const copyEmail = useCallback(async () => {
     await navigator.clipboard.writeText(composedEmail);
     setCopied(true);
+    addToast('Copied to clipboard', 'success');
     setTimeout(() => setCopied(false), 2000);
-  }, [composedEmail]);
+  }, [composedEmail, addToast]);
 
-  /* ---- Derived ---- */
-  const showAgentGrid = analysisStatus === 'done';
-  const agentsDone = phase === 'review' || phase === 'composing' || phase === 'done';
+  /* ---- Sorted flights ---- */
+  const sortedFlights = [...flights].sort((a, b) => {
+    if (flightSort === 'price') return a.price - b.price;
+    if (flightSort === 'stops') return a.stops - b.stops;
+    return a.duration.localeCompare(b.duration);
+  });
+
+  const allAgentsDone = completedRef.current >= 4 ||
+    ['flight', 'hotel', 'research', 'places'].every(k => agentStatuses[k] === 'done' || agentStatuses[k] === 'error');
 
   /* ================================================================
      Render
      ================================================================ */
 
   return (
-    <div className="min-h-screen">
-      {/* Background grid */}
-      <div
-        className="pointer-events-none fixed inset-0 z-0 opacity-[0.02]"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.3) 1px, transparent 0)',
-          backgroundSize: '48px 48px',
-        }}
-      />
+    <div className="p-6 lg:p-8 max-w-6xl mx-auto min-h-screen">
+      <Breadcrumb items={breadcrumbs} />
 
-      {/* ===== SECTION 1 — HEADER + INPUT ===== */}
-      <section
-        className={`relative z-10 mx-auto max-w-4xl px-6 transition-all duration-700 ${
-          phase === 'input'
-            ? 'flex min-h-screen flex-col items-center justify-center'
-            : 'pt-10 pb-6'
-        }`}
-      >
-        {/* Title */}
-        <div className={`text-center ${phase === 'input' ? 'mb-8' : 'mb-5'}`}>
-          <div className="mb-3 flex items-center justify-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-teal/20 to-cyan/20 border border-teal/20">
-              <Zap size={22} className="text-teal" />
-            </div>
-          </div>
-          <h1
-            className={`font-bold tracking-tight text-foreground transition-all duration-500 ${
-              phase === 'input' ? 'text-5xl' : 'text-2xl'
-            }`}
-          >
-            AI Travel Assistant
-          </h1>
-          {phase === 'input' && (
-            <p className="mt-2 text-lg text-foreground/40">
-              Paste any customer email. Watch AI handle it in seconds.
-            </p>
-          )}
-        </div>
+      {/* ===== STEP 1 — EMAIL INPUT ===== */}
+      {step === 1 && (
+        <div className="animate-fade-in">
+          <h1 className="text-2xl font-bold text-foreground mb-1">Inbox</h1>
+          <p className="text-sm text-foreground/40 mb-8">Select a customer email or paste your own</p>
 
-        {/* Textarea */}
-        <div className="w-full max-w-3xl mx-auto">
-          <textarea
-            value={emailText}
-            onChange={(e) => setEmailText(e.target.value)}
-            readOnly={phase !== 'input'}
-            className={`w-full rounded-xl border bg-navy-deep/50 px-6 py-5 text-base leading-relaxed text-foreground/80 outline-none transition-all duration-500 resize-none font-sans ${
-              phase !== 'input'
-                ? 'border-card-border/20 opacity-40 cursor-not-allowed max-h-28 overflow-hidden text-sm'
-                : 'border-card-border hover:border-teal/30 focus:border-teal/50 focus:ring-1 focus:ring-teal/20 min-h-[280px]'
-            }`}
-            placeholder="Paste a customer email here..."
-          />
-
-          {phase === 'input' && (
-            <div className="mt-6 flex flex-col items-center gap-4 animate-fade-in-up stagger-2">
+          {/* Sample emails */}
+          <div className="space-y-2 mb-6">
+            {SAMPLE_EMAILS.map((email) => (
               <button
-                onClick={processEmail}
-                disabled={!emailText.trim()}
-                className="inline-flex items-center justify-center gap-2.5 rounded-lg bg-gradient-to-r from-teal to-cyan px-8 py-3.5 text-base font-semibold tracking-wide text-navy-deep transition-all duration-200 hover:brightness-110 active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                key={email.id}
+                onClick={() => analyzeEmail(email.body)}
+                className="w-full glass-card flex items-center gap-4 px-5 py-4 text-left transition-all hover:border-teal/30 cursor-pointer group"
               >
-                <Send size={18} />
-                Process Email
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-teal/10 text-teal">
+                  <Mail size={18} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground">{email.from}</span>
+                    <span className="text-xs text-foreground/25">{email.date}</span>
+                  </div>
+                  <p className="text-sm font-medium text-foreground/60 mt-0.5">{email.subject}</p>
+                  <p className="text-xs text-foreground/30 mt-0.5 truncate">{email.preview}</p>
+                </div>
+                <ArrowRight size={16} className="text-foreground/15 group-hover:text-teal transition-colors" />
               </button>
-              <p className="text-sm text-foreground/25">
-                Try it with your own email — change the destination, dates, or
-                language
-              </p>
+            ))}
+          </div>
+
+          {/* Paste custom */}
+          {!showPaste ? (
+            <button
+              onClick={() => setShowPaste(true)}
+              className="w-full rounded-lg border border-dashed border-card-border py-4 text-sm text-foreground/30 hover:border-teal/30 hover:text-foreground/50 transition-colors cursor-pointer"
+            >
+              + Paste a custom email
+            </button>
+          ) : (
+            <div className="space-y-3 animate-fade-in">
+              <textarea
+                value={emailText}
+                onChange={(e) => setEmailText(e.target.value)}
+                className={`${INPUT_CLS} min-h-[200px] resize-none`}
+                placeholder="Paste a customer email here..."
+                autoFocus
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={() => analyzeEmail(emailText)}
+                  disabled={!emailText.trim()}
+                  className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-teal to-cyan px-6 py-2.5 text-sm font-semibold text-navy-deep transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <Send size={15} /> Process
+                </button>
+                <button onClick={() => { setShowPaste(false); setEmailText(''); }} className="text-sm text-foreground/35 hover:text-foreground/60 cursor-pointer">
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
         </div>
-      </section>
+      )}
 
-      {/* ===== SECTION 2 — AGENT PIPELINE ===== */}
-      {phase !== 'input' && (
-        <section
-          ref={pipelineRef}
-          className="relative z-10 mx-auto max-w-5xl px-6 pb-10 animate-fade-in-up"
-        >
-          <h2 className="mb-8 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground/20">
-            Agent Pipeline
-          </h2>
+      {/* ===== STEP 2 — ANALYSIS (EDITABLE) ===== */}
+      {step === 2 && (
+        <div className="animate-fade-in">
+          <h1 className="text-2xl font-bold text-foreground mb-1">Email Analysis</h1>
+          <p className="text-sm text-foreground/40 mb-8">
+            Review and edit the extracted information before searching
+            {analysisSource === 'live' && <LiveBadge source="live" />}
+            {analysisTime > 0 && <span className="ml-2 text-foreground/25"><Clock size={11} className="inline" /> {fmtTime(analysisTime)}</span>}
+          </p>
 
-          {/* -- Email Analysis -- */}
-          <div className="mx-auto mb-8 max-w-3xl">
-            <div className="glass-card p-5">
-              <div className="flex items-center gap-4">
-                <div
-                  className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-colors duration-300 ${
-                    analysisStatus === 'done'
-                      ? 'bg-teal/15'
-                      : analysisStatus === 'active'
-                        ? 'bg-teal/10'
-                        : 'bg-foreground/5'
-                  }`}
-                >
-                  {analysisStatus === 'active' && (
-                    <Loader2 size={20} className="animate-spin text-teal" />
-                  )}
-                  {analysisStatus === 'done' && (
-                    <CheckCircle size={20} className="text-teal" />
-                  )}
-                  {analysisStatus === 'error' && (
-                    <AlertCircle size={20} className="text-red-400" />
-                  )}
-                  {analysisStatus === 'idle' && (
-                    <Mail size={20} className="text-foreground/30" />
-                  )}
+          {analysisLoading && (
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+              <Loader2 size={32} className="animate-spin text-teal" />
+              <p className="text-sm text-foreground/40">Analyzing email...</p>
+            </div>
+          )}
+
+          {edited && !analysisLoading && (
+            <div className="space-y-6 max-w-3xl">
+              {/* Route */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-foreground/40 mb-1.5">Origin</label>
+                  <div className="flex gap-2">
+                    <input value={edited.origin} onChange={e => setEdited({ ...edited, origin: e.target.value })} className={INPUT_CLS} />
+                    <input value={edited.originIATA} onChange={e => setEdited({ ...edited, originIATA: e.target.value.toUpperCase() })} className={`${INPUT_CLS} w-20 text-center uppercase`} placeholder="IATA" />
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-sm font-semibold text-foreground/80">
-                      Email Analysis
-                    </h3>
-                    {analysisStatus === 'active' && (
-                      <span className="text-xs text-foreground/35">
-                        Reading and understanding the request...
-                      </span>
-                    )}
-                    {analysisStatus === 'done' && (
-                      <>
-                        <LiveBadge source={analysisSource} />
-                        <span className="flex items-center gap-1 text-[11px] text-foreground/30">
-                          <Clock size={10} />
-                          {fmtTime(analysisTime)}
-                        </span>
-                      </>
-                    )}
+                <div>
+                  <label className="block text-xs font-medium text-foreground/40 mb-1.5">Destination</label>
+                  <div className="flex gap-2">
+                    <input value={edited.destination} onChange={e => setEdited({ ...edited, destination: e.target.value })} className={INPUT_CLS} />
+                    <input value={edited.destinationIATA} onChange={e => setEdited({ ...edited, destinationIATA: e.target.value.toUpperCase() })} className={`${INPUT_CLS} w-20 text-center uppercase`} placeholder="IATA" />
                   </div>
                 </div>
               </div>
 
-              {/* Extracted data */}
-              {analysis && (
-                <div className="mt-4 space-y-2.5 pl-14 text-sm animate-fade-in">
-                  <div className="flex items-center gap-2 text-foreground/60">
-                    <span className="text-foreground/30">Route:</span>
-                    <span className="font-medium text-foreground/80">
-                      {analysis.origin}
+              {/* Dates */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-foreground/40 mb-1.5">Start Date</label>
+                  <input type="date" value={edited.startDate} onChange={e => setEdited({ ...edited, startDate: e.target.value })} className={INPUT_CLS} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-foreground/40 mb-1.5">End Date</label>
+                  <input type="date" value={edited.endDate} onChange={e => setEdited({ ...edited, endDate: e.target.value })} className={INPUT_CLS} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-foreground/40 mb-1.5">Duration (days)</label>
+                  <input type="number" value={edited.duration} onChange={e => setEdited({ ...edited, duration: parseInt(e.target.value) || 1 })} className={INPUT_CLS} min={1} />
+                </div>
+              </div>
+
+              {/* Travelers + Budget */}
+              <div className="grid grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-foreground/40 mb-1.5">Adults</label>
+                  <input type="number" value={edited.adults} onChange={e => setEdited({ ...edited, adults: parseInt(e.target.value) || 1 })} className={INPUT_CLS} min={1} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-foreground/40 mb-1.5">Children</label>
+                  <input type="number" value={edited.children} onChange={e => setEdited({ ...edited, children: parseInt(e.target.value) || 0 })} className={INPUT_CLS} min={0} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-foreground/40 mb-1.5">Budget Min (€/night)</label>
+                  <input type="number" value={edited.budgetMin} onChange={e => setEdited({ ...edited, budgetMin: parseInt(e.target.value) || 0 })} className={INPUT_CLS} min={0} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-foreground/40 mb-1.5">Budget Max (€/night)</label>
+                  <input type="number" value={edited.budgetMax} onChange={e => setEdited({ ...edited, budgetMax: parseInt(e.target.value) || 0 })} className={INPUT_CLS} min={0} />
+                </div>
+              </div>
+
+              {/* Interests */}
+              <div>
+                <label className="block text-xs font-medium text-foreground/40 mb-1.5">Interests</label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {edited.interests.map((tag, i) => (
+                    <span key={i} className="flex items-center gap-1.5 rounded-full bg-teal/10 px-3 py-1 text-xs text-teal/80">
+                      {tag}
+                      <button onClick={() => setEdited({ ...edited, interests: edited.interests.filter((_, j) => j !== i) })} className="text-teal/40 hover:text-teal cursor-pointer"><X size={12} /></button>
                     </span>
-                    <span className="text-[11px] text-foreground/25">
-                      ({analysis.originIATA})
-                    </span>
-                    <ArrowRight size={14} className="text-teal/50" />
-                    <span className="font-medium text-foreground/80">
-                      {analysis.destination}
-                    </span>
-                    <span className="text-[11px] text-foreground/25">
-                      ({analysis.destinationIATA})
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-x-6 gap-y-1 text-foreground/50">
-                    <span>
-                      <span className="text-foreground/30">Dates:</span>{' '}
-                      {fmtDate(analysis.dates.start)} &ndash;{' '}
-                      {fmtDate(analysis.dates.end)}
-                      <span className="ml-1 text-foreground/25">
-                        ({analysis.dates.duration} days)
-                      </span>
-                    </span>
-                    <span>
-                      <span className="text-foreground/30">Travelers:</span>{' '}
-                      {analysis.travelers.adults} adult
-                      {analysis.travelers.adults !== 1 && 's'}
-                      {analysis.travelers.children > 0 &&
-                        `, ${analysis.travelers.children} child${analysis.travelers.children !== 1 ? 'ren' : ''}`}
-                    </span>
-                    <span>
-                      <span className="text-foreground/30">Budget:</span>{' '}
-                      {analysis.budget.min > 0
-                        ? `\u20AC${analysis.budget.min}\u2013${analysis.budget.max}/night`
-                        : 'Flexible'}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {analysis.interests.map((interest, i) => (
-                      <span
-                        key={i}
-                        className="rounded-full bg-teal/10 px-2.5 py-0.5 text-xs text-teal/80"
-                      >
-                        {interest}
-                      </span>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={newInterest}
+                    onChange={e => setNewInterest(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && newInterest.trim()) { setEdited({ ...edited, interests: [...edited.interests, newInterest.trim()] }); setNewInterest(''); } }}
+                    className={`${INPUT_CLS} max-w-[200px]`}
+                    placeholder="Add interest..."
+                  />
+                  <button
+                    onClick={() => { if (newInterest.trim()) { setEdited({ ...edited, interests: [...edited.interests, newInterest.trim()] }); setNewInterest(''); } }}
+                    className="rounded-lg bg-teal/10 px-3 py-2 text-teal hover:bg-teal/20 cursor-pointer transition-colors"
+                  ><Plus size={16} /></button>
+                </div>
+              </div>
+
+              {/* Language */}
+              <div className="max-w-[200px]">
+                <label className="block text-xs font-medium text-foreground/40 mb-1.5">Detected Language</label>
+                <select value={edited.language} onChange={e => setEdited({ ...edited, language: e.target.value })} className={INPUT_CLS}>
+                  <option value="en">English</option>
+                  <option value="de">German</option>
+                  <option value="el">Greek</option>
+                  <option value="fr">French</option>
+                  <option value="it">Italian</option>
+                  <option value="es">Spanish</option>
+                </select>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-4 border-t border-card-border/30">
+                <button onClick={() => setStep(1)} className="inline-flex items-center gap-2 rounded-lg bg-card border border-card-border px-5 py-2.5 text-sm font-medium text-foreground/60 hover:border-foreground/20 hover:text-foreground cursor-pointer transition-all">
+                  <ArrowLeft size={15} /> Back
+                </button>
+                <button
+                  onClick={confirmAndSearch}
+                  className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-teal to-cyan px-6 py-2.5 text-sm font-semibold text-navy-deep transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer"
+                >
+                  <Search size={15} /> Confirm &amp; Search
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===== STEP 3 — RESULTS (TABS) ===== */}
+      {step === 3 && (
+        <div className="animate-fade-in">
+          <h1 className="text-2xl font-bold text-foreground mb-1">Search Results</h1>
+          <p className="text-sm text-foreground/40 mb-6">
+            {analysis?.origin} → {analysis?.destination} · {analysis?.dates.duration} days · {analysis?.travelers.adults} adults
+          </p>
+
+          {/* Tab bar */}
+          <div className="flex gap-1 border-b border-card-border/30 mb-6">
+            {([
+              { key: 'flights' as const, label: 'Flights', icon: Plane, color: '#22D3EE', count: flights.length },
+              { key: 'hotels' as const, label: 'Hotels', icon: Building2, color: '#F59E0B', count: hotels.length },
+              { key: 'itinerary' as const, label: 'Itinerary', icon: Search, color: '#10B981', count: null },
+              { key: 'places' as const, label: 'Places', icon: MapPin, color: '#A78BFA', count: places.length },
+            ]).map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer -mb-px ${
+                  activeTab === tab.key ? 'border-current' : 'border-transparent text-foreground/35 hover:text-foreground/55'
+                }`}
+                style={{ color: activeTab === tab.key ? tab.color : undefined }}
+              >
+                <tab.icon size={15} />
+                {tab.label}
+                {agentStatuses[tab.key === 'itinerary' ? 'research' : tab.key] === 'active' && <Loader2 size={12} className="animate-spin" />}
+                {agentStatuses[tab.key === 'itinerary' ? 'research' : tab.key] === 'done' && tab.count != null && (
+                  <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10px]">{tab.count}</span>
+                )}
+                <LiveBadge source={agentSources[tab.key === 'itinerary' ? 'research' : tab.key]} />
+                {agentTimes[tab.key === 'itinerary' ? 'research' : tab.key] != null && (
+                  <span className="text-[10px] text-foreground/20">{fmtTime(agentTimes[tab.key === 'itinerary' ? 'research' : tab.key])}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* FLIGHTS TAB */}
+          {activeTab === 'flights' && (
+            <div>
+              {agentStatuses.flight === 'active' && (
+                <div className="flex items-center gap-3 py-12 justify-center text-foreground/30"><Loader2 size={20} className="animate-spin text-cyan" /> Searching flights...</div>
+              )}
+              {flights.length > 0 && (
+                <div>
+                  <div className="flex gap-2 mb-3">
+                    <span className="text-xs text-foreground/30">Sort:</span>
+                    {(['price', 'duration', 'stops'] as const).map(s => (
+                      <button key={s} onClick={() => setFlightSort(s)} className={`text-xs cursor-pointer transition-colors ${flightSort === s ? 'text-cyan font-medium' : 'text-foreground/30 hover:text-foreground/50'}`}>
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </button>
                     ))}
+                  </div>
+                  <div className="glass-card overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-card-border text-left text-[11px] uppercase tracking-wider text-foreground/25">
+                          <th className="w-10 px-4 py-2.5" />
+                          <th className="px-4 py-2.5 font-medium">Airline</th>
+                          <th className="px-4 py-2.5 font-medium">Departure</th>
+                          <th className="px-4 py-2.5 font-medium">Arrival</th>
+                          <th className="px-4 py-2.5 font-medium">Stops</th>
+                          <th className="px-4 py-2.5 font-medium">Duration</th>
+                          <th className="px-4 py-2.5 font-medium text-right">Price</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedFlights.map((f, i) => {
+                          const origIdx = flights.indexOf(f);
+                          return (
+                            <tr key={i} onClick={() => setSelectedFlightIdx(origIdx)}
+                              className={`border-b border-card-border/20 last:border-0 cursor-pointer transition-all hover:bg-white/[0.02] ${origIdx === selectedFlightIdx ? 'bg-cyan/[0.06]' : ''}`}>
+                              <td className="px-4 py-3">
+                                <div className={`flex h-5 w-5 items-center justify-center rounded-full border ${origIdx === selectedFlightIdx ? 'border-cyan bg-cyan/20' : 'border-foreground/15'}`}>
+                                  {origIdx === selectedFlightIdx && <Check size={12} className="text-cyan" />}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 font-medium text-foreground/80">{f.airline}</td>
+                              <td className="px-4 py-3 tabular-nums text-foreground/60">{fmtClock(f.departureTime)}</td>
+                              <td className="px-4 py-3 tabular-nums text-foreground/60">{fmtClock(f.arrivalTime)}</td>
+                              <td className="px-4 py-3">{f.stops === 0 ? <span className="text-green/80">Direct</span> : `${f.stops} stop${f.stops > 1 ? 's' : ''}`}</td>
+                              <td className="px-4 py-3 text-foreground/40">{f.duration}</td>
+                              <td className={`px-4 py-3 text-right font-semibold tabular-nums ${origIdx === selectedFlightIdx ? 'text-cyan' : 'text-foreground/60'}`}>{f.price}€</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
             </div>
-          </div>
+          )}
 
-          {/* -- 4-Column Agent Grid -- */}
-          {showAgentGrid && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 animate-fade-in-up">
-              {/* Flight */}
-              <AgentColumn
-                name="Flights"
-                icon={<Plane size={18} />}
-                color="#22D3EE"
-                status={agentStatuses.flight as Status}
-                message={agentMessages.flight}
-                time={agentTimes.flight}
-                source={agentSources.flight}
-              >
-                {flights.length > 0 && (
-                  <div className="space-y-1.5 text-xs">
-                    {flights.slice(0, 4).map((f, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between text-foreground/50"
-                      >
-                        <span className="truncate max-w-[110px]">
-                          {f.airline}
-                        </span>
-                        <span className="font-medium tabular-nums text-foreground/70">
-                          {f.price}\u20AC
-                        </span>
+          {/* HOTELS TAB */}
+          {activeTab === 'hotels' && (
+            <div>
+              {agentStatuses.hotel === 'active' && (
+                <div className="flex items-center gap-3 py-12 justify-center text-foreground/30"><Loader2 size={20} className="animate-spin text-amber" /> Searching hotels...</div>
+              )}
+              {hotels.length > 0 && (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {hotels.map((h, i) => (
+                    <div key={i} onClick={() => setSelectedHotelIdx(i)}
+                      className={`glass-card p-4 cursor-pointer transition-all hover:border-amber/30 ${i === selectedHotelIdx ? 'border-amber/40 bg-amber/[0.04]' : ''}`}>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            {i === selectedHotelIdx && <CheckCircle size={14} className="text-amber" />}
+                            <h4 className="text-sm font-medium text-foreground/90">{h.name}</h4>
+                          </div>
+                          <p className="mt-0.5 text-xs text-foreground/40">{h.area}</p>
+                        </div>
+                        <div className="flex items-center gap-1 rounded bg-amber/10 px-1.5 py-0.5 text-xs font-semibold text-amber">
+                          <Star size={10} className="fill-amber" />{h.rating}
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </AgentColumn>
-
-              {/* Hotel */}
-              <AgentColumn
-                name="Hotels"
-                icon={<Building2 size={18} />}
-                color="#F59E0B"
-                status={agentStatuses.hotel as Status}
-                message={agentMessages.hotel}
-                time={agentTimes.hotel}
-                source={agentSources.hotel}
-              >
-                {hotels.length > 0 && (
-                  <div className="space-y-1.5 text-xs">
-                    {hotels.slice(0, 4).map((h, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between text-foreground/50"
-                      >
-                        <span className="truncate max-w-[110px]">{h.name}</span>
-                        <span className="font-medium tabular-nums text-foreground/70">
-                          {h.pricePerNight}\u20AC
-                        </span>
+                      <div className="mt-2 text-xs text-foreground/30">{h.amenities?.join(' · ')}</div>
+                      <div className="mt-3 flex items-center justify-between border-t border-card-border/30 pt-3">
+                        <div className="flex items-center gap-1 text-[11px] text-foreground/40">
+                          <TrainFront size={11} />{h.metroStation} ({h.metroDistance})
+                        </div>
+                        <div className="text-sm font-semibold text-amber">{h.pricePerNight}€<span className="ml-0.5 text-[10px] font-normal text-foreground/30">/night</span></div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </AgentColumn>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-              {/* Research */}
-              <AgentColumn
-                name="Research"
-                icon={<Search size={18} />}
-                color="#10B981"
-                status={agentStatuses.research as Status}
-                message={agentMessages.research}
-                time={agentTimes.research}
-                source={agentSources.research}
-              >
-                {research && (
-                  <div className="space-y-1 text-[11px] text-foreground/45">
-                    {parseResearchDays(research)
-                      .slice(0, 4)
-                      .map((d, i) => (
-                        <div key={i} className="truncate">
-                          <span className="font-medium text-foreground/55">
-                            {d.day}:
-                          </span>{' '}
+          {/* ITINERARY TAB */}
+          {activeTab === 'itinerary' && (
+            <div>
+              {agentStatuses.research === 'active' && (
+                <div className="flex items-center gap-3 py-12 justify-center text-foreground/30"><Loader2 size={20} className="animate-spin text-green" /> Generating itinerary...</div>
+              )}
+              {research && (
+                <div className="space-y-2">
+                  {parseResearchDays(research).map((d, i) => (
+                    <div key={i} className="glass-card overflow-hidden">
+                      <button onClick={() => setExpandedDays(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; })}
+                        className="w-full flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-white/[0.02] transition-colors">
+                        <div className="flex items-center gap-3">
+                          <span className="rounded bg-green/10 px-2.5 py-0.5 text-xs font-semibold text-green">{d.day}</span>
+                          <span className="text-sm text-foreground/70 truncate max-w-[500px]">{d.desc.split('.')[0]}</span>
+                        </div>
+                        {expandedDays.has(i) ? <ChevronUp size={16} className="text-foreground/25" /> : <ChevronDown size={16} className="text-foreground/25" />}
+                      </button>
+                      {expandedDays.has(i) && (
+                        <div className="px-5 pb-4 text-sm text-foreground/50 leading-relaxed border-t border-card-border/20 pt-3">
                           {d.desc}
                         </div>
-                      ))}
-                    {parseResearchDays(research).length > 4 && (
-                      <div className="text-foreground/25">
-                        +{parseResearchDays(research).length - 4} more days
-                      </div>
-                    )}
-                  </div>
-                )}
-              </AgentColumn>
-
-              {/* Places */}
-              <AgentColumn
-                name="Places"
-                icon={<MapPin size={18} />}
-                color="#A78BFA"
-                status={agentStatuses.places as Status}
-                message={agentMessages.places}
-                time={agentTimes.places}
-                source={agentSources.places}
-              >
-                {places.length > 0 && (
-                  <div className="space-y-1.5 text-xs">
-                    {places.slice(0, 5).map((p, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between text-foreground/50"
-                      >
-                        <span className="truncate max-w-[110px]">{p.name}</span>
-                        {p.rating != null && (
-                          <span className="flex items-center gap-0.5 text-foreground/35">
-                            <Star size={9} className="fill-current" />
-                            {p.rating}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </AgentColumn>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* ===== SECTION 3 — REVIEW & SELECT ===== */}
-      {agentsDone && (
-        <section
-          ref={reviewRef}
-          className="relative z-10 mx-auto max-w-5xl px-6 pb-10 animate-fade-in-up"
-        >
-          <h2 className="mb-8 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground/20">
-            Review &amp; Select
-          </h2>
-
-          {/* Flight selection */}
-          {flights.length > 0 && (
-            <div className="mb-8">
-              <div className="mb-3 flex items-center gap-2">
-                <Plane size={16} className="text-cyan" />
-                <h3 className="text-sm font-semibold text-foreground/60">
-                  Select Flight
-                  {analysis && (
-                    <span className="ml-2 text-xs font-normal text-foreground/25">
-                      {analysis.originIATA} &rarr; {analysis.destinationIATA}
-                    </span>
+                      )}
+                    </div>
+                  ))}
+                  {parseResearchDays(research).length === 0 && (
+                    <div className="glass-card px-5 py-4 text-sm text-foreground/50 whitespace-pre-wrap leading-relaxed">{research}</div>
                   )}
-                </h3>
-                <LiveBadge source={agentSources.flight} />
-              </div>
-              <div className="glass-card overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-card-border text-left text-[11px] uppercase tracking-wider text-foreground/30">
-                      <th className="w-8 px-4 py-2.5" />
-                      <th className="px-4 py-2.5 font-medium">Airline</th>
-                      <th className="px-4 py-2.5 font-medium">Departure</th>
-                      <th className="px-4 py-2.5 font-medium">Arrival</th>
-                      <th className="px-4 py-2.5 font-medium">Stops</th>
-                      <th className="px-4 py-2.5 font-medium">Duration</th>
-                      <th className="px-4 py-2.5 font-medium text-right">
-                        Price
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {flights.map((f, i) => (
-                      <tr
-                        key={i}
-                        onClick={() =>
-                          phase === 'review' && setSelectedFlightIdx(i)
-                        }
-                        className={`border-b border-card-border/20 last:border-0 transition-all duration-150 ${
-                          phase === 'review'
-                            ? 'cursor-pointer hover:bg-white/[0.02]'
-                            : ''
-                        } ${
-                          i === selectedFlightIdx
-                            ? 'bg-cyan/[0.06]'
-                            : ''
-                        }`}
-                      >
-                        <td className="px-4 py-3">
-                          <div
-                            className={`flex h-5 w-5 items-center justify-center rounded-full border transition-colors ${
-                              i === selectedFlightIdx
-                                ? 'border-cyan bg-cyan/20'
-                                : 'border-foreground/15'
-                            }`}
-                          >
-                            {i === selectedFlightIdx && (
-                              <Check size={12} className="text-cyan" />
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 font-medium text-foreground/80">
-                          {f.airline}
-                        </td>
-                        <td className="px-4 py-3 tabular-nums text-foreground/60">
-                          {fmtClock(f.departureTime)}
-                        </td>
-                        <td className="px-4 py-3 tabular-nums text-foreground/60">
-                          {fmtClock(f.arrivalTime)}
-                        </td>
-                        <td className="px-4 py-3 text-foreground/50">
-                          {f.stops === 0 ? (
-                            <span className="text-green/80">Direct</span>
-                          ) : (
-                            `${f.stops} stop${f.stops > 1 ? 's' : ''}`
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-foreground/40">
-                          {f.duration}
-                        </td>
-                        <td
-                          className={`px-4 py-3 text-right font-semibold tabular-nums ${
-                            i === selectedFlightIdx
-                              ? 'text-cyan'
-                              : 'text-foreground/60'
-                          }`}
-                        >
-                          {f.price}\u20AC
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Hotel selection */}
-          {hotels.length > 0 && (
-            <div className="mb-8">
-              <div className="mb-3 flex items-center gap-2">
-                <Building2 size={16} className="text-amber" />
-                <h3 className="text-sm font-semibold text-foreground/60">
-                  Select Hotel
-                </h3>
-                <LiveBadge source={agentSources.hotel} />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {hotels.map((h, i) => (
-                  <div
-                    key={i}
-                    onClick={() =>
-                      phase === 'review' && setSelectedHotelIdx(i)
-                    }
-                    className={`glass-card p-4 transition-all duration-200 ${
-                      phase === 'review'
-                        ? 'cursor-pointer hover:border-amber/30'
-                        : ''
-                    } ${
-                      i === selectedHotelIdx
-                        ? 'border-amber/40 bg-amber/[0.04]'
-                        : ''
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
+          {/* PLACES TAB */}
+          {activeTab === 'places' && (
+            <div>
+              {agentStatuses.places === 'active' && (
+                <div className="flex items-center gap-3 py-12 justify-center text-foreground/30"><Loader2 size={20} className="animate-spin text-purple" /> Searching places...</div>
+              )}
+              {places.length > 0 && (
+                <div className="glass-card divide-y divide-card-border/20">
+                  {places.map((p, i) => (
+                    <div key={i} className="flex items-center gap-4 px-5 py-3">
+                      <input
+                        type="checkbox"
+                        checked={includedPlaces.has(p.name)}
+                        onChange={() => setIncludedPlaces(prev => { const n = new Set(prev); n.has(p.name) ? n.delete(p.name) : n.add(p.name); return n; })}
+                        className="h-4 w-4 rounded border-foreground/20 bg-navy-deep accent-teal cursor-pointer"
+                      />
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          {i === selectedHotelIdx && (
-                            <CheckCircle size={14} className="text-amber" />
+                          <span className="text-sm font-medium text-foreground/80">{p.name}</span>
+                          {p.rating != null && (
+                            <span className="flex items-center gap-0.5 text-xs text-purple/60"><Star size={10} className="fill-current" />{p.rating}</span>
                           )}
-                          <h4 className="text-sm font-medium text-foreground/90">
-                            {h.name}
-                          </h4>
                         </div>
-                        <p className="mt-0.5 text-xs text-foreground/40">
-                          {h.area}
-                        </p>
+                        <p className="text-xs text-foreground/30 truncate">{p.address}</p>
+                        {p.summary && <p className="text-xs text-foreground/40 mt-0.5 line-clamp-1">{p.summary}</p>}
                       </div>
-                      <div className="flex items-center gap-1 rounded bg-amber/10 px-1.5 py-0.5 text-xs font-semibold text-amber">
-                        <Star size={10} className="fill-amber" />
-                        {h.rating}
-                      </div>
+                      {p.mapsUrl && (
+                        <a href={p.mapsUrl} target="_blank" rel="noopener noreferrer" className="text-foreground/20 hover:text-purple transition-colors">
+                          <ExternalLink size={14} />
+                        </a>
+                      )}
                     </div>
-                    <div className="mt-3 flex items-center justify-between border-t border-card-border/30 pt-3">
-                      <div className="flex items-center gap-1 text-[11px] text-foreground/40">
-                        <TrainFront size={11} />
-                        {h.metroStation} ({h.metroDistance})
-                      </div>
-                      <div className="text-sm font-semibold text-amber">
-                        {h.pricePerNight}\u20AC
-                        <span className="ml-0.5 text-[10px] font-normal text-foreground/30">
-                          /night
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           {/* Compose button */}
-          {phase === 'review' && (
-            <div className="flex justify-center pt-2 animate-fade-in-up">
-              <button
-                onClick={startCompose}
-                className="inline-flex items-center justify-center gap-2.5 rounded-lg bg-gradient-to-r from-pink/90 to-purple/90 px-8 py-3.5 text-base font-semibold tracking-wide text-white transition-all duration-200 hover:from-pink hover:to-purple active:scale-[0.97] cursor-pointer"
-              >
-                <PenTool size={18} />
-                Compose Response
-              </button>
-            </div>
-          )}
-        </section>
+          <div className="flex items-center gap-4 mt-8 pt-6 border-t border-card-border/30">
+            <button onClick={() => setStep(2)} className="inline-flex items-center gap-2 rounded-lg bg-card border border-card-border px-5 py-2.5 text-sm font-medium text-foreground/60 hover:border-foreground/20 cursor-pointer transition-all">
+              <ArrowLeft size={15} /> Back
+            </button>
+            <button
+              onClick={startCompose}
+              disabled={!allAgentsDone}
+              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-pink/90 to-purple/90 px-6 py-2.5 text-sm font-semibold text-white transition-all hover:from-pink hover:to-purple active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+            >
+              <PenTool size={15} /> Compose Response
+            </button>
+            {!allAgentsDone && <span className="text-xs text-foreground/25">Waiting for all agents to complete...</span>}
+          </div>
+        </div>
       )}
 
-      {/* ===== SECTION 4 — COMPOSE ===== */}
-      {(phase === 'composing' || phase === 'done') && (
-        <section
-          ref={composeRef}
-          className="relative z-10 mx-auto max-w-4xl px-6 pb-24 animate-fade-in-up"
-        >
-          <h2 className="mb-6 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground/20">
-            {isStreaming ? 'Composing response...' : 'Response Ready'}
-          </h2>
+      {/* ===== STEP 4 — COMPOSE ===== */}
+      {step === 4 && (
+        <div className="animate-fade-in">
+          <h1 className="text-2xl font-bold text-foreground mb-1">
+            {isStreaming ? 'Composing Response...' : 'Response Ready'}
+          </h1>
+          <p className="text-sm text-foreground/40 mb-6">
+            {isStreaming ? 'AI is writing the response email' : `Completed in ${totalTime}s — manually this takes 30-45 minutes`}
+          </p>
 
-          <div
-            className="glass-card overflow-hidden transition-colors duration-500"
-            style={{
-              borderColor: isStreaming
-                ? 'rgba(236, 72, 153, 0.2)'
-                : 'rgba(16, 185, 129, 0.2)',
-            }}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-card-border px-6 py-3.5">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-300 ${
-                    isStreaming
-                      ? 'bg-pink/10 text-pink'
-                      : 'bg-green/10 text-green'
-                  }`}
-                >
-                  {isStreaming ? (
-                    <Loader2 size={16} className="animate-spin" />
+          <div className="flex gap-6">
+            {/* Email */}
+            <div className="flex-1 min-w-0">
+              <div className="glass-card overflow-hidden" style={{ borderColor: isStreaming ? 'rgba(236,72,153,0.2)' : 'rgba(16,185,129,0.2)' }}>
+                <div className="flex items-center justify-between border-b border-card-border px-5 py-3">
+                  <div className="flex items-center gap-2">
+                    {isStreaming ? <Loader2 size={14} className="animate-spin text-pink" /> : <CheckCircle size={14} className="text-green" />}
+                    <span className="text-sm text-foreground/50">{isStreaming ? 'Writing...' : 'Complete'}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    {!isStreaming && composedEmail && (
+                      <>
+                        <button onClick={() => setIsEditing(!isEditing)} className="text-xs text-foreground/35 hover:text-foreground/60 cursor-pointer">
+                          {isEditing ? 'Preview' : 'Edit'}
+                        </button>
+                        <button onClick={copyEmail} className="flex items-center gap-1.5 rounded-lg bg-card border border-card-border px-3 py-1.5 text-xs text-foreground/60 hover:border-foreground/20 cursor-pointer transition-all">
+                          {copied ? <Check size={12} className="text-green" /> : <Copy size={12} />}
+                          {copied ? 'Copied!' : 'Copy'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="min-h-[300px] px-5 py-4">
+                  {isEditing ? (
+                    <textarea
+                      value={composedEmail}
+                      onChange={e => setComposedEmail(e.target.value)}
+                      className="w-full min-h-[300px] bg-transparent text-sm leading-relaxed text-foreground/80 outline-none resize-none"
+                    />
                   ) : (
-                    <CheckCircle size={16} />
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/80">
+                      {composedEmail}
+                      {isStreaming && <span className="animate-blink ml-0.5 inline-block h-4 w-[2px] translate-y-[2px] bg-pink/70" />}
+                    </div>
                   )}
                 </div>
-                <span className="text-sm font-medium text-foreground/60">
-                  {isStreaming ? 'Writing...' : 'Complete'}
-                </span>
               </div>
 
-              {!isStreaming && composedEmail && (
-                <button
-                  onClick={copyEmail}
-                  className="flex items-center gap-2 rounded-lg bg-card border border-card-border px-4 py-2 text-xs font-medium text-foreground/60 transition-all hover:border-foreground/20 hover:text-foreground cursor-pointer"
-                >
-                  {copied ? (
-                    <Check size={14} className="text-green" />
-                  ) : (
-                    <Copy size={14} />
-                  )}
-                  {copied ? 'Copied!' : 'Copy'}
-                </button>
+              {/* Actions */}
+              {!isStreaming && (
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={() => { addToast('Email sent! (simulated)', 'success'); }}
+                    className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-teal to-cyan px-6 py-2.5 text-sm font-semibold text-navy-deep transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer"
+                  >
+                    <Send size={15} /> Send
+                  </button>
+                  <button onClick={handleReset} className="inline-flex items-center gap-2 rounded-lg bg-card border border-card-border px-5 py-2.5 text-sm font-medium text-foreground/60 hover:border-foreground/20 cursor-pointer transition-all">
+                    <RotateCcw size={14} /> New Email
+                  </button>
+                </div>
               )}
             </div>
 
-            {/* Body */}
-            <div className="min-h-[200px] px-6 py-5">
-              <div className="whitespace-pre-wrap font-sans text-base leading-relaxed text-foreground/80">
-                {composedEmail}
-                {isStreaming && (
-                  <span className="animate-blink ml-0.5 inline-block h-5 w-[2px] translate-y-[3px] bg-pink/70" />
+            {/* Right sidebar: selected summary */}
+            {!isStreaming && (
+              <div className="hidden lg:block w-72 flex-shrink-0 space-y-4 animate-fade-in">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground/25">Selected Options</h3>
+                {flights[selectedFlightIdx] && (
+                  <div className="glass-card p-3">
+                    <div className="flex items-center gap-2 text-xs text-cyan mb-1"><Plane size={12} /> Flight</div>
+                    <p className="text-sm font-medium text-foreground/80">{flights[selectedFlightIdx].airline}</p>
+                    <p className="text-xs text-foreground/40">{fmtClock(flights[selectedFlightIdx].departureTime)} → {fmtClock(flights[selectedFlightIdx].arrivalTime)} · {flights[selectedFlightIdx].price}€</p>
+                  </div>
+                )}
+                {hotels[selectedHotelIdx] && (
+                  <div className="glass-card p-3">
+                    <div className="flex items-center gap-2 text-xs text-amber mb-1"><Building2 size={12} /> Hotel</div>
+                    <p className="text-sm font-medium text-foreground/80">{hotels[selectedHotelIdx].name}</p>
+                    <p className="text-xs text-foreground/40">{hotels[selectedHotelIdx].area} · {hotels[selectedHotelIdx].pricePerNight}€/night · ★{hotels[selectedHotelIdx].rating}</p>
+                  </div>
+                )}
+                {analysis && (
+                  <div className="glass-card p-3">
+                    <div className="flex items-center gap-2 text-xs text-teal mb-1"><Mail size={12} /> Trip</div>
+                    <p className="text-xs text-foreground/40">{analysis.origin} → {analysis.destination}</p>
+                    <p className="text-xs text-foreground/40">{analysis.dates.duration} days · {analysis.travelers.adults} adults</p>
+                  </div>
+                )}
+                {totalTime > 0 && (
+                  <div className="glass-card p-3">
+                    <div className="flex items-center gap-2 text-xs text-green mb-1"><Clock size={12} /> Time</div>
+                    <p className="text-sm font-bold text-green tabular-nums">{totalTime}s</p>
+                    <p className="text-[10px] text-foreground/25">vs 30-45 min manually</p>
+                  </div>
                 )}
               </div>
-            </div>
+            )}
           </div>
-
-          {/* Done footer */}
-          {phase === 'done' && (
-            <div className="mt-8 flex flex-col items-center gap-6 animate-fade-in">
-              {totalTime > 0 && (
-                <div className="text-center">
-                  <p className="flex items-center justify-center gap-2 text-lg">
-                    <Clock size={18} className="text-teal" />
-                    <span className="text-foreground/50">Processed in</span>
-                    <span className="font-bold text-teal tabular-nums">
-                      {totalTime}s
-                    </span>
-                  </p>
-                  <p className="mt-1 text-sm text-foreground/25">
-                    Manually, this takes 30&ndash;45 minutes
-                  </p>
-                </div>
-              )}
-
-              <button
-                onClick={reset}
-                className="inline-flex items-center justify-center gap-2.5 rounded-lg bg-card border border-card-border px-6 py-2.5 text-sm font-semibold text-foreground/70 transition-all hover:border-foreground/20 hover:text-foreground active:scale-[0.97] cursor-pointer"
-              >
-                <RotateCcw size={15} />
-                New Email
-              </button>
-            </div>
-          )}
-        </section>
+        </div>
       )}
 
-      {/* Footer */}
-      <footer className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/[0.04] bg-navy-deep/80 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-6xl items-center justify-center gap-1.5 px-6 py-2.5 text-[11px] text-foreground/20">
-          Powered by
-          <span className="font-medium text-foreground/30">GPT-4o</span>
-          <span className="text-foreground/10">+</span>
-          <span className="font-medium text-foreground/30">Duffel</span>
-          <span className="text-foreground/10">+</span>
-          <span className="font-medium text-foreground/30">Google Places</span>
-        </div>
-      </footer>
+      {/* Powered by footer */}
+      <div className="mt-12 pb-4 text-center text-[11px] text-foreground/15">
+        Powered by <span className="text-foreground/25">GPT-4o</span> + <span className="text-foreground/25">Duffel</span> + <span className="text-foreground/25">Google Places</span>
+      </div>
     </div>
   );
 }

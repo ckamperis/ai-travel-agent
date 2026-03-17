@@ -23,11 +23,21 @@ export async function POST(request: Request) {
           places: body.places || [],
         };
 
+        const composerSettings = body.settings
+          ? {
+              ...body.settings,
+              includedPlaces: body.includedPlaces,
+            }
+          : body.includedPlaces
+            ? { includedPlaces: body.includedPlaces }
+            : undefined;
+
         const gen = composeResponse(
           allResults,
           body.email,
           body.selectedFlight ?? undefined,
-          body.selectedHotel ?? undefined
+          body.selectedHotel ?? undefined,
+          composerSettings
         );
 
         for await (const chunk of gen) {

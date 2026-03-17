@@ -112,3 +112,43 @@ body {
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/* Line clamp */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Select & input color scheme */
+select, input[type="date"], input[type="number"] {
+  color-scheme: dark;
+}
+
+/* Range slider */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  width: 100%;
+}
+input[type="range"]::-webkit-slider-track {
+  height: 4px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: #0891B2;
+  margin-top: -6px;
+}
+
+/* Checkbox accent */
+input[type="checkbox"] {
+  accent-color: #0891B2;
+}

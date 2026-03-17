@@ -26,21 +26,38 @@ function getAgentSource(agent: AgentName): 'live' | 'mock' {
   }
 }
 
-export async function* orchestrate(emailText: string): AsyncGenerator<AgentEvent> {
-  // ── Phase 1: Email Analysis (sequential) ──────────────────────────
-  yield makeEvent("email", "started", "Reading and understanding the request...");
-
+export async function* orchestrate(
+  emailText: string,
+  mode: 'full' | 'analyze' | 'search' = 'full',
+  preAnalysis?: EmailAnalysis
+): AsyncGenerator<AgentEvent> {
+  // ── Phase 1: Email Analysis ──────────────────────────────────────
   let analysis: EmailAnalysis;
-  try {
-    analysis = await analyzeEmail(emailText);
-    yield makeEvent("email", "done", "Analysis complete", analysis, getAgentSource("email"));
-  } catch {
-    yield makeEvent("email", "error", "Email analysis failed");
-    return;
+
+  if (mode === 'search' && preAnalysis) {
+    // Skip email analysis — use the pre-supplied analysis directly
+    analysis = preAnalysis;
+    yield makeEvent("email", "done", "Using previous analysis", analysis, getAgentSource("email"));
+  } else {
+    // Run email analysis
+    yield makeEvent("email", "started", "Reading and understanding the request...");
+
+    try {
+      analysis = await analyzeEmail(emailText);
+      yield makeEvent("email", "done", "Analysis complete", analysis, getAgentSource("email"));
+    } catch {
+      yield makeEvent("email", "error", "Email analysis failed");
+      return;
+    }
+
+    // If mode is 'analyze', stop here — only email analysis was requested
+    if (mode === 'analyze') {
+      return;
+    }
   }
 
   // ── Phase 2: Parallel Agents ──────────────────────────────────────
-  yield makeEvent("flight", "started", `Duffel API: ${analysis.originIATA} \u2192 ${analysis.destinationIATA}`);
+  yield makeEvent("flight", "started", `Duffel API: ${analysis.originIATA} → ${analysis.destinationIATA}`);
   yield makeEvent("hotel", "started", `Hotels in ${analysis.destination}`);
   yield makeEvent("research", "started", `GPT-4o: ${analysis.dates.duration}-day itinerary for ${analysis.destination}`);
   yield makeEvent("places", "started", `Google Places: ${analysis.destination}`);
