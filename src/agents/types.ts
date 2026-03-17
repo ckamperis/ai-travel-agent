@@ -21,6 +21,7 @@ export interface EmailAnalysis {
   interests: string[];
   language: string;
   specialRequests: string[];
+  customerName?: string;
 }
 
 export interface FlightResult {

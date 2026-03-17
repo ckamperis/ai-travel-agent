@@ -30,6 +30,8 @@ export async function searchPlaces(analysis: EmailAnalysis): Promise<PlaceResult
           address: place.address,
           summary: place.summary,
           mapsUrl: place.mapsUrl,
+          lat: place.lat,
+          lng: place.lng,
         });
       }
     }

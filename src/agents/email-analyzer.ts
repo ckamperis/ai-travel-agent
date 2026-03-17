@@ -57,7 +57,8 @@ Respond ONLY with valid JSON matching this exact schema:
   "budget": { "min": number (per night), "max": number (per night), "currency": "EUR" },
   "interests": ["string"],
   "language": "detected language code (e.g. en, de, fr)",
-  "specialRequests": ["specific request strings"]
+  "specialRequests": ["specific request strings"],
+  "customerName": "primary contact's full name (e.g. 'Klaus Mueller', 'Marie Dupont')"
 }`,
         },
         { role: "user", content: emailText },

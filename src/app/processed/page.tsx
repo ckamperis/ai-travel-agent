@@ -89,8 +89,13 @@ export default function ProcessedPage() {
                   {/* From */}
                   <td className="px-5 py-3.5">
                     <span className="font-medium" style={{ color: 'var(--color-text)' }}>
-                      {entry.from}
+                      {entry.customerName || entry.from}
                     </span>
+                    {entry.customerEmail && entry.customerEmail !== entry.from && (
+                      <p className="mt-0.5 text-xs truncate max-w-[220px]" style={{ color: 'var(--color-text-muted)' }}>
+                        {entry.customerEmail}
+                      </p>
+                    )}
                     {entry.subject && (
                       <p className="mt-0.5 text-xs truncate max-w-[220px]" style={{ color: 'var(--color-text-muted)' }}>
                         {entry.subject}

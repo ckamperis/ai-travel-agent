@@ -59,13 +59,14 @@ interface EditableAnalysis {
   adults: number; children: number;
   budgetMin: number; budgetMax: number; currency: string;
   interests: string[]; language: string; specialRequests: string[];
+  customerName?: string;
 }
 
 function toEditable(a: EmailAnalysis): EditableAnalysis {
-  return { origin: a.origin, originIATA: a.originIATA, destination: a.destination, destinationIATA: a.destinationIATA, startDate: a.dates.start, endDate: a.dates.end, duration: a.dates.duration, adults: a.travelers.adults, children: a.travelers.children, budgetMin: a.budget.min, budgetMax: a.budget.max, currency: a.budget.currency, interests: [...a.interests], language: a.language, specialRequests: [...a.specialRequests] };
+  return { origin: a.origin, originIATA: a.originIATA, destination: a.destination, destinationIATA: a.destinationIATA, startDate: a.dates.start, endDate: a.dates.end, duration: a.dates.duration, adults: a.travelers.adults, children: a.travelers.children, budgetMin: a.budget.min, budgetMax: a.budget.max, currency: a.budget.currency, interests: [...a.interests], language: a.language, specialRequests: [...a.specialRequests], customerName: a.customerName };
 }
 function toAnalysis(e: EditableAnalysis): EmailAnalysis {
-  return { origin: e.origin, originIATA: e.originIATA, destination: e.destination, destinationIATA: e.destinationIATA, dates: { start: e.startDate, end: e.endDate, duration: e.duration }, travelers: { adults: e.adults, children: e.children, names: [] }, budget: { min: e.budgetMin, max: e.budgetMax, currency: e.currency }, interests: e.interests, language: e.language, specialRequests: e.specialRequests };
+  return { origin: e.origin, originIATA: e.originIATA, destination: e.destination, destinationIATA: e.destinationIATA, dates: { start: e.startDate, end: e.endDate, duration: e.duration }, travelers: { adults: e.adults, children: e.children, names: [] }, budget: { min: e.budgetMin, max: e.budgetMax, currency: e.currency }, interests: e.interests, language: e.language, specialRequests: e.specialRequests, customerName: e.customerName };
 }
 
 function fmtTime(ms: number) { return `${(ms / 1000).toFixed(1)}s`; }
@@ -107,6 +108,7 @@ export default function InboxPage() {
   const [emailText, setEmailText] = useState('');
   const [showPaste, setShowPaste] = useState(false);
   const [currentSampleId, setCurrentSampleId] = useState<string | null>(null);
+  const [currentSampleFrom, setCurrentSampleFrom] = useState<string | null>(null);
   const [showOriginalEmail, setShowOriginalEmail] = useState(false);
   const [processedSampleIds, setProcessedSampleIds] = useState<Set<string>>(new Set());
 
@@ -156,9 +158,10 @@ export default function InboxPage() {
   ];
 
   /* ---- Step 1 → 2 ---- */
-  const analyzeEmail = useCallback(async (text: string, sampleId?: string) => {
+  const analyzeEmail = useCallback(async (text: string, sampleId?: string, sampleFrom?: string) => {
     setEmailText(text);
     setCurrentSampleId(sampleId || null);
+    setCurrentSampleFrom(sampleFrom || null);
     setShowOriginalEmail(true);
     setStep(2);
     setAnalysisLoading(true);
@@ -312,25 +315,26 @@ export default function InboxPage() {
       setIsStreaming(false);
       const total = Math.round((Date.now() - startTimeRef.current) / 1000);
       setTotalTime(total);
-      const customerEmail = extractEmail(emailText);
+      const customerEmail = currentSampleFrom || extractEmail(emailText);
+      const customerName = analysis?.customerName || analysis?.travelers.names?.[0] || '';
       if (analysis) {
         addToHistory({
-          id: Date.now().toString(), from: customerEmail || 'Unknown',
+          id: Date.now().toString(), from: customerName || customerEmail || 'Unknown',
           subject: `Trip to ${analysis.destination}`, destination: analysis.destination,
           processedAt: new Date().toISOString(), totalTime: total,
           status: text.length > 50 ? 'completed' : 'failed',
-          composedResponse: text, customerEmail, customerName: analysis.travelers.names?.[0] || '',
+          composedResponse: text, customerEmail, customerName,
           sampleEmailId: currentSampleId || undefined,
         });
         if (currentSampleId) {
           setProcessedSampleIds(prev => new Set([...prev, currentSampleId]));
         }
         if (customerEmail) {
-          upsertCustomer({ email: customerEmail, name: analysis.travelers.names?.[0] || '', destination: analysis.destination, hotel: hotels[selectedHotelIdx]?.name, budget: `€${analysis.budget.min}-${analysis.budget.max}`, language: analysis.language });
+          upsertCustomer({ email: customerEmail, name: customerName, destination: analysis.destination, hotel: hotels[selectedHotelIdx]?.name, budget: `€${analysis.budget.min}-${analysis.budget.max}`, language: analysis.language });
         }
       }
     }
-  }, [emailText, analysis, flights, hotels, research, places, selectedFlightIdx, selectedHotelIdx, includedPlaces, settings, knownCustomer, currentSampleId, addToast]);
+  }, [emailText, analysis, flights, hotels, research, places, selectedFlightIdx, selectedHotelIdx, includedPlaces, settings, knownCustomer, currentSampleId, currentSampleFrom, addToast]);
 
   /* ---- Translate ---- */
   const translateTo = useCallback(async (lang: string) => {
@@ -350,7 +354,7 @@ export default function InboxPage() {
     const days = settings?.followUpDays || 3;
     const scheduled = new Date(); scheduled.setDate(scheduled.getDate() + days);
     addFollowUp({
-      customerEmail: extractEmail(emailText), customerName: analysis.travelers.names?.[0] || extractEmail(emailText),
+      customerEmail: currentSampleFrom || extractEmail(emailText), customerName: analysis.customerName || analysis.travelers.names?.[0] || currentSampleFrom || extractEmail(emailText),
       destination: analysis.destination, originalResponse: composedEmail,
       scheduledDate: scheduled.toISOString(), status: 'pending',
       processedEmailId: Date.now().toString(),
@@ -363,7 +367,7 @@ export default function InboxPage() {
     setStep(1); setEmailText(''); setShowPaste(false); setAnalysis(null); setEdited(null);
     setAnalysisLoading(false); setFlights([]); setHotels([]); setResearch(''); setPlaces([]);
     setComposedEmail(''); setIsStreaming(false); setTotalTime(0); setKnownCustomer(null);
-    setWeather([]); setShowFollowUpForm(false);
+    setWeather([]); setShowFollowUpForm(false); setCurrentSampleFrom(null);
     completedRef.current = 0;
   }, []);
 
@@ -412,7 +416,7 @@ export default function InboxPage() {
           <p className="text-sm mb-8" style={{ color: 'var(--color-text-secondary)' }}>Select a customer email or paste your own</p>
           <div className="space-y-2 mb-6">
             {SAMPLE_EMAILS.filter(e => !processedSampleIds.has(e.id)).map(email => (
-              <button key={email.id} onClick={() => analyzeEmail(email.body, email.id)}
+              <button key={email.id} onClick={() => analyzeEmail(email.body, email.id, email.from)}
                 className="w-full glass-card flex items-center gap-4 px-5 py-4 text-left transition-all cursor-pointer group"
                 style={{ borderColor: 'var(--color-border)' }}>
                 <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full" style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}><Mail size={18} /></div>
@@ -451,14 +455,14 @@ export default function InboxPage() {
             <div className="flex items-center gap-2 text-sm">
               <Mail size={14} style={{ color: 'var(--color-primary)' }} />
               <span className="font-medium" style={{ color: 'var(--color-text)' }}>Original Email</span>
-              {analysis && <span style={{ color: 'var(--color-text-muted)' }}>&mdash; {extractEmail(emailText) || 'Customer'}</span>}
+              {analysis && <span style={{ color: 'var(--color-text-muted)' }}>&mdash; {currentSampleFrom || extractEmail(emailText) || 'Customer'}</span>}
             </div>
             <ChevronDown size={14} style={{ color: 'var(--color-text-muted)', transform: showOriginalEmail ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
           </button>
           {showOriginalEmail && (
             <div className="px-5 py-4 max-h-[240px] overflow-y-auto">
               <div className="flex gap-4 mb-3 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                <span><b style={{ color: 'var(--color-text-secondary)' }}>From:</b> {extractEmail(emailText) || 'Unknown'}</span>
+                <span><b style={{ color: 'var(--color-text-secondary)' }}>From:</b> {currentSampleFrom || extractEmail(emailText) || 'Unknown'}</span>
                 {analysis && <span><b style={{ color: 'var(--color-text-secondary)' }}>Subject:</b> Trip to {analysis.destination}</span>}
               </div>
               <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans" style={{ color: 'var(--color-text-secondary)' }}>{emailText}</pre>
@@ -737,7 +741,7 @@ export default function InboxPage() {
                   <iframe
                     srcDoc={emailToHtml(composedEmail, {
                       from: profile?.email || 'info@afea-travel.com',
-                      to: extractEmail(emailText),
+                      to: currentSampleFrom || extractEmail(emailText),
                       subject: analysis ? `Re: Trip to ${analysis.destination}` : 'Travel Proposal',
                       agency: profile?.agencyName || 'Afea Travel',
                     })}

@@ -15,6 +15,7 @@ export interface EmailAnalysis {
   interests: string[];
   language: string;
   requests: string[];
+  customerName?: string;
 }
 
 export interface ComposeSettings {
@@ -87,18 +88,15 @@ export async function researchDestination(
 
   const response = await client.chat.completions.create({
     model: MODEL,
-    max_tokens: 2048,
+    max_tokens: 1500,
     messages: [
       {
         role: "system",
-        content: `You are an expert travel advisor. Provide detailed, practical travel recommendations.
-Include day-by-day suggestions, local tips, and insider knowledge.
-Write in a warm, professional tone suitable for a travel agency response.
-Focus on: ${interests.join(", ")}.`,
+        content: `You are a travel advisor. Write a CONCISE day-by-day plan. For each day: 2-3 bullet points max. Focus on: ${interests.join(", ")}. No lengthy descriptions.`,
       },
       {
         role: "user",
-        content: `Create a ${days}-day travel itinerary for ${destination}. Include must-see sights, recommended restaurants, neighborhood walks, and day trip suggestions.`,
+        content: `Create a concise ${days}-day itinerary for ${destination}. Format: "Day 1 - Title: activity, activity, restaurant". Keep each day to 2-3 sentences.`,
       },
     ],
   });
