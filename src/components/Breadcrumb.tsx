@@ -12,16 +12,16 @@ export default function Breadcrumb({ items }: { items: BreadcrumbItem[] }) {
     <nav className="flex items-center gap-1.5 text-sm mb-6">
       {items.map((item, i) => (
         <span key={i} className="flex items-center gap-1.5">
-          {i > 0 && <ChevronRight size={14} className="text-foreground/15" />}
+          {i > 0 && <ChevronRight size={14} style={{ color: 'var(--color-text-muted)' }} />}
           {item.onClick ? (
-            <button
-              onClick={item.onClick}
-              className="text-foreground/35 hover:text-foreground/60 cursor-pointer transition-colors"
-            >
+            <button onClick={item.onClick} className="cursor-pointer transition-colors"
+              style={{ color: 'var(--color-text-muted)' }}>
               {item.label}
             </button>
           ) : (
-            <span className="text-foreground/70 font-medium">{item.label}</span>
+            <span className="font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+              {item.label}
+            </span>
           )}
         </span>
       ))}

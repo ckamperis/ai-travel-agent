@@ -21,6 +21,8 @@ export async function searchHotels(analysis: EmailAnalysis): Promise<HotelResult
       metroDistance: h.metroDistance,
       amenities: h.amenities,
       highlights: h.highlights,
+      lat: h.lat,
+      lng: h.lng,
     }));
   } catch (error) {
     console.error("Hotel agent failed:", error);

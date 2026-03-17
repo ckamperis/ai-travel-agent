@@ -35,16 +35,17 @@ function languageLabel(code: string): string {
   return LANGUAGES.find((l) => l.value === code)?.label ?? code;
 }
 
-function languageBadgeColor(code: string): string {
-  const map: Record<string, string> = {
-    en: 'bg-cyan/10 text-cyan',
-    de: 'bg-amber/10 text-amber',
-    el: 'bg-teal/10 text-teal',
-    fr: 'bg-purple/10 text-purple',
-    it: 'bg-green/10 text-green',
-    es: 'bg-pink/10 text-pink',
+function languageBadgeStyle(code: string): React.CSSProperties {
+  const map: Record<string, { bg: string; text: string }> = {
+    en: { bg: 'var(--color-primary-light)', text: 'var(--color-primary)' },
+    de: { bg: 'var(--color-amber-light)', text: 'var(--color-amber)' },
+    el: { bg: 'var(--color-primary-light)', text: 'var(--color-primary)' },
+    fr: { bg: 'var(--color-purple-light)', text: 'var(--color-purple)' },
+    it: { bg: 'var(--color-green-light)', text: 'var(--color-green)' },
+    es: { bg: 'color-mix(in srgb, var(--color-pink) 10%, transparent)', text: 'var(--color-pink)' },
   };
-  return map[code] ?? 'bg-foreground/10 text-foreground/50';
+  const colors = map[code] ?? { bg: 'var(--color-bg-secondary)', text: 'var(--color-text-secondary)' };
+  return { background: colors.bg, color: colors.text };
 }
 
 interface FormState {
@@ -54,6 +55,15 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = { name: '', language: 'en', content: '' };
+
+/* Shared input styles */
+const inputClass = 'w-full rounded-lg border px-4 py-2.5 text-sm outline-none transition-colors';
+
+const inputStyle: React.CSSProperties = {
+  background: 'var(--color-surface)',
+  borderColor: 'var(--color-border)',
+  color: 'var(--color-text)',
+};
 
 export default function TemplatesPage() {
   const { addToast } = useToast();
@@ -136,12 +146,17 @@ export default function TemplatesPage() {
       <div className="mb-8 flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-pink/10">
-              <FileText size={18} className="text-pink" />
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-lg"
+              style={{ background: 'color-mix(in srgb, var(--color-pink) 10%, transparent)' }}
+            >
+              <FileText size={18} style={{ color: 'var(--color-pink)' }} />
             </div>
-            <h1 className="text-2xl font-bold text-foreground">Templates</h1>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>
+              Templates
+            </h1>
           </div>
-          <p className="text-sm text-foreground/40 ml-12">
+          <p className="text-sm ml-12" style={{ color: 'var(--color-text-muted)' }}>
             Manage email response templates with variable placeholders
           </p>
         </div>
@@ -149,7 +164,8 @@ export default function TemplatesPage() {
         {!showForm && (
           <button
             onClick={openCreate}
-            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-teal to-cyan px-4 py-2 text-sm font-semibold text-navy-deep transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer"
+            className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer"
+            style={{ background: 'var(--color-primary)', color: '#FFFFFF' }}
           >
             <Plus size={16} />
             Create Template
@@ -157,16 +173,17 @@ export default function TemplatesPage() {
         )}
       </div>
 
-      {/* ── Inline Form ──────────────────────────────────────── */}
+      {/* -- Inline Form ----------------------------------------- */}
       {showForm && (
         <div className="glass-card mb-8 p-6 animate-fade-in-up">
           <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-foreground/70">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
               {editingId ? 'Edit Template' : 'New Template'}
             </h2>
             <button
               onClick={cancelForm}
-              className="text-foreground/30 hover:text-foreground/60 cursor-pointer"
+              className="cursor-pointer transition-colors"
+              style={{ color: 'var(--color-text-muted)' }}
             >
               <X size={18} />
             </button>
@@ -176,7 +193,7 @@ export default function TemplatesPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               {/* Name */}
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-foreground/50">
+                <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
                   Template Name
                 </label>
                 <input
@@ -186,13 +203,14 @@ export default function TemplatesPage() {
                     setForm((prev) => ({ ...prev, name: e.target.value }))
                   }
                   placeholder="e.g. Welcome Response"
-                  className="w-full rounded-lg border border-card-border bg-navy-deep/50 px-4 py-2.5 text-sm text-foreground/80 outline-none focus:border-teal/50 focus:ring-1 focus:ring-teal/20"
+                  className={inputClass}
+                  style={inputStyle}
                 />
               </div>
 
               {/* Language */}
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-foreground/50">
+                <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
                   Language
                 </label>
                 <select
@@ -200,7 +218,8 @@ export default function TemplatesPage() {
                   onChange={(e) =>
                     setForm((prev) => ({ ...prev, language: e.target.value }))
                   }
-                  className="w-full rounded-lg border border-card-border bg-navy-deep/50 px-4 py-2.5 text-sm text-foreground/80 outline-none focus:border-teal/50 focus:ring-1 focus:ring-teal/20"
+                  className={inputClass}
+                  style={inputStyle}
                 >
                   {LANGUAGES.map((lang) => (
                     <option key={lang.value} value={lang.value}>
@@ -213,7 +232,7 @@ export default function TemplatesPage() {
 
             {/* Content */}
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-foreground/50">
+              <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
                 Content
               </label>
               <textarea
@@ -223,22 +242,27 @@ export default function TemplatesPage() {
                 }
                 rows={8}
                 placeholder="Write your template here using variables like {{guest_name}} ..."
-                className="w-full rounded-lg border border-card-border bg-navy-deep/50 px-4 py-2.5 text-sm text-foreground/80 outline-none focus:border-teal/50 focus:ring-1 focus:ring-teal/20 resize-none font-mono"
+                className={`${inputClass} resize-none font-mono`}
+                style={inputStyle}
               />
             </div>
 
             {/* Variables hint */}
-            <div className="flex items-start gap-2 rounded-lg bg-navy-deep/40 px-4 py-3">
-              <Code size={14} className="mt-0.5 flex-shrink-0 text-teal/60" />
+            <div
+              className="flex items-start gap-2 rounded-lg px-4 py-3"
+              style={{ background: 'var(--color-bg-secondary)' }}
+            >
+              <Code size={14} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--color-primary)', opacity: 0.6 }} />
               <div>
-                <p className="text-[11px] font-medium text-foreground/40 mb-1.5">
+                <p className="text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>
                   Available Variables
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {VARIABLES.map((v) => (
                     <code
                       key={v}
-                      className="rounded bg-teal/8 px-1.5 py-0.5 text-[11px] text-teal/70 font-mono"
+                      className="rounded px-1.5 py-0.5 text-[11px] font-mono"
+                      style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}
                     >
                       {v}
                     </code>
@@ -251,13 +275,15 @@ export default function TemplatesPage() {
             <div className="flex justify-end gap-3 pt-2">
               <button
                 onClick={cancelForm}
-                className="rounded-lg border border-card-border px-4 py-2 text-sm font-medium text-foreground/50 transition-colors hover:text-foreground/70 cursor-pointer"
+                className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors cursor-pointer"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
-                className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-teal to-cyan px-5 py-2 text-sm font-semibold text-navy-deep transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-semibold transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer"
+                style={{ background: 'var(--color-primary)', color: '#FFFFFF' }}
               >
                 <Save size={14} />
                 {editingId ? 'Update' : 'Create'}
@@ -267,12 +293,12 @@ export default function TemplatesPage() {
         </div>
       )}
 
-      {/* ── Template List ────────────────────────────────────── */}
+      {/* -- Template List --------------------------------------- */}
       <div className="space-y-3">
         {templates.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <FileText size={40} className="text-foreground/10 mb-3" />
-            <p className="text-sm text-foreground/30">
+            <FileText size={40} style={{ color: 'var(--color-text-muted)', opacity: 0.3 }} className="mb-3" />
+            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
               No templates yet. Create your first one.
             </p>
           </div>
@@ -281,29 +307,31 @@ export default function TemplatesPage() {
         {templates.map((tpl) => (
           <div
             key={tpl.id}
-            className="glass-card overflow-hidden transition-all duration-200 hover:border-card-border/40"
+            className="glass-card overflow-hidden transition-all duration-200"
           >
             {/* Row */}
             <div className="flex items-center gap-4 px-5 py-4">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2.5">
-                  <h3 className="text-sm font-medium text-foreground/80 truncate">
+                  <h3 className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
                     {tpl.name}
                   </h3>
                   <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${languageBadgeColor(
-                      tpl.language
-                    )}`}
+                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+                    style={languageBadgeStyle(tpl.language)}
                   >
                     {languageLabel(tpl.language)}
                   </span>
                   {tpl.isDefault && (
-                    <span className="rounded-full bg-foreground/5 px-2 py-0.5 text-[10px] font-medium text-foreground/30">
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                      style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-muted)' }}
+                    >
                       Default
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-xs text-foreground/30 truncate">
+                <p className="mt-1 text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
                   {tpl.content.slice(0, 100)}
                   {tpl.content.length > 100 ? '...' : ''}
                 </p>
@@ -315,7 +343,8 @@ export default function TemplatesPage() {
                   onClick={() =>
                     setExpandedId(expandedId === tpl.id ? null : tpl.id)
                   }
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-foreground/30 hover:bg-white/[0.04] hover:text-foreground/50 cursor-pointer transition-colors"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg cursor-pointer transition-colors"
+                  style={{ color: 'var(--color-text-muted)' }}
                 >
                   {expandedId === tpl.id ? (
                     <ChevronUp size={16} />
@@ -326,7 +355,8 @@ export default function TemplatesPage() {
                 {/* Edit */}
                 <button
                   onClick={() => openEdit(tpl)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-foreground/30 hover:bg-white/[0.04] hover:text-foreground/50 cursor-pointer transition-colors"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg cursor-pointer transition-colors"
+                  style={{ color: 'var(--color-text-muted)' }}
                 >
                   <Pencil size={14} />
                 </button>
@@ -334,11 +364,12 @@ export default function TemplatesPage() {
                 <button
                   onClick={() => handleDelete(tpl.id)}
                   disabled={tpl.isDefault}
-                  className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-                    tpl.isDefault
-                      ? 'text-foreground/10 cursor-not-allowed'
-                      : 'text-foreground/30 hover:bg-red-500/10 hover:text-red-400 cursor-pointer'
-                  }`}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
+                  style={{
+                    color: tpl.isDefault ? 'var(--color-text-muted)' : 'var(--color-text-muted)',
+                    opacity: tpl.isDefault ? 0.3 : 1,
+                    cursor: tpl.isDefault ? 'not-allowed' : 'pointer',
+                  }}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -347,14 +378,24 @@ export default function TemplatesPage() {
 
             {/* Expanded content */}
             {expandedId === tpl.id && (
-              <div className="border-t border-card-border/30 bg-navy-deep/20 px-5 py-4 animate-fade-in">
-                <pre className="whitespace-pre-wrap text-xs leading-relaxed text-foreground/45 font-mono">
+              <div
+                className="px-5 py-4 animate-fade-in"
+                style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)' }}
+              >
+                <pre className="whitespace-pre-wrap text-xs leading-relaxed font-mono" style={{ color: 'var(--color-text-secondary)' }}>
                   {tpl.content}
                 </pre>
               </div>
             )}
           </div>
         ))}
+      </div>
+
+      {/* Footer */}
+      <div className="mt-8 text-center">
+        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          &copy; 2026 Revival SA — AI &amp; Business Intelligence
+        </p>
       </div>
     </div>
   );

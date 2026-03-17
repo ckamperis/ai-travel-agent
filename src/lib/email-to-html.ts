@@ -24,7 +24,7 @@ export function emailToHtml(
 <body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
 <div style="max-width:640px;margin:0 auto;background:#ffffff">
   <!-- Header -->
-  <div style="background:#0B1D3A;padding:24px 32px;color:#ffffff">
+  <div style="background:#0066FF;padding:24px 32px;color:#ffffff">
     <div style="font-size:18px;font-weight:700;letter-spacing:0.5px">${escapeHtml(meta?.agency || 'Afea Travel')}</div>
     <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:4px">Travel Services</div>
   </div>
@@ -43,7 +43,7 @@ export function emailToHtml(
 
   <!-- Footer -->
   <div style="padding:20px 32px;background:#f9fafb;border-top:1px solid #eee;font-size:11px;color:#aaa;text-align:center">
-    Sent via ${escapeHtml(meta?.agency || 'Afea Travel')} &middot; Powered by TravelAgent AI
+    Sent via ${escapeHtml(meta?.agency || 'Afea Travel')} &middot; &copy; 2026 Revival SA
   </div>
 </div>
 </body>

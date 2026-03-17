@@ -1,29 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard,
-  Inbox,
-  CheckSquare,
-  CalendarClock,
-  Users,
-  Settings,
-  Bot,
-  FileText,
-  User,
-  Bell,
-  Menu,
-  X,
-  Zap,
+  LayoutDashboard, Inbox, CheckSquare, CalendarClock, Users,
+  Settings, Bot, FileText, User, Menu, X, Zap, PanelLeftClose, PanelLeft,
 } from 'lucide-react';
+import { loadFollowUps } from '@/lib/settings';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/inbox', label: 'Inbox', icon: Inbox },
+  { href: '/inbox', label: 'Inbox', icon: Inbox, badge: 'inbox' as const },
   { href: '/processed', label: 'Processed', icon: CheckSquare },
-  { href: '/follow-ups', label: 'Follow-ups', icon: CalendarClock },
+  { href: '/follow-ups', label: 'Follow-ups', icon: CalendarClock, badge: 'followups' as const },
   { href: '/customers', label: 'Customers', icon: Users },
   { href: '/settings', label: 'Settings', icon: Settings },
   { href: '/agents', label: 'Agents', icon: Bot },
@@ -34,76 +24,79 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [badges, setBadges] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const pending = loadFollowUps().filter(f => f.status === 'pending').length;
+    setBadges({ inbox: 3, followups: pending });
+  }, [pathname]);
+
+  const sidebarW = collapsed ? 'w-16' : 'w-60';
 
   return (
     <>
       {/* Mobile toggle */}
-      <button
-        onClick={() => setMobileOpen(!mobileOpen)}
-        className="fixed top-4 left-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg bg-navy-light/80 backdrop-blur-sm border border-card-border text-foreground/60 lg:hidden cursor-pointer"
-      >
+      <button onClick={() => setMobileOpen(!mobileOpen)}
+        className="fixed top-3.5 left-3 z-50 flex h-9 w-9 items-center justify-center rounded-lg border cursor-pointer lg:hidden"
+        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
         {mobileOpen ? <X size={18} /> : <Menu size={18} />}
       </button>
 
-      {/* Mobile overlay */}
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
+      {mobileOpen && <div className="fixed inset-0 z-30 bg-black/30 lg:hidden" onClick={() => setMobileOpen(false)} />}
 
-      {/* Sidebar */}
-      <aside
-        className={`fixed top-0 left-0 z-40 flex h-screen w-60 flex-shrink-0 flex-col border-r border-card-border bg-navy-deep transition-transform duration-300 lg:static lg:translate-x-0 ${
-          mobileOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
+      <aside className={`fixed top-0 left-0 z-40 flex h-screen ${sidebarW} flex-shrink-0 flex-col border-r transition-all duration-200 lg:static lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        style={{ background: 'var(--color-sidebar)', borderColor: 'var(--color-border)' }}>
+
         {/* Logo */}
-        <div className="flex items-center gap-2.5 border-b border-card-border px-5 py-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-teal/20 to-cyan/20 border border-teal/20">
-            <Zap size={16} className="text-teal" />
+        <div className="flex items-center gap-2.5 border-b px-4 py-3.5" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0" style={{ background: 'var(--color-primary-light)' }}>
+            <Zap size={16} style={{ color: 'var(--color-primary)' }} />
           </div>
-          <span className="text-sm font-bold tracking-tight text-foreground">
-            TravelAgent AI
-          </span>
+          {!collapsed && <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>TravelAgent AI</span>}
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {NAV_ITEMS.map((item) => {
+        {/* Nav */}
+        <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
+          {NAV_ITEMS.map(item => {
             const active = pathname === item.href;
+            const badge = item.badge ? badges[item.badge] : 0;
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                  active
-                    ? 'bg-teal/10 text-teal'
-                    : 'text-foreground/45 hover:bg-white/[0.03] hover:text-foreground/70'
-                }`}
-              >
+              <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150 ${collapsed ? 'justify-center' : ''}`}
+                style={{
+                  background: active ? 'var(--color-sidebar-active)' : 'transparent',
+                  color: active ? 'var(--color-primary)' : 'var(--color-sidebar-text)',
+                }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}>
                 <item.icon size={18} />
-                {item.label}
+                {!collapsed && <span className="flex-1">{item.label}</span>}
+                {!collapsed && badge > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white"
+                    style={{ background: item.badge === 'inbox' ? 'var(--color-primary)' : 'var(--color-amber)' }}>
+                    {badge}
+                  </span>
+                )}
               </Link>
             );
           })}
         </nav>
 
-        {/* Bottom */}
-        <div className="border-t border-card-border px-4 py-3">
-          <div className="flex items-center justify-between px-2">
-            <button className="relative text-foreground/35 hover:text-foreground/55 cursor-pointer transition-colors">
-              <Bell size={18} />
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-teal text-[9px] font-bold text-navy-deep">
-                3
-              </span>
-            </button>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-teal/30 to-cyan/30 text-xs font-bold text-teal">
-              AT
-            </div>
-          </div>
+        {/* Footer */}
+        <div className="border-t px-2 py-2" style={{ borderColor: 'var(--color-border)' }}>
+          <button onClick={() => setCollapsed(!collapsed)}
+            className="hidden lg:flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors cursor-pointer"
+            style={{ color: 'var(--color-text-muted)' }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-hover)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+            {collapsed ? <PanelLeft size={16} /> : <><PanelLeftClose size={16} /><span>Collapse</span></>}
+          </button>
+          {!collapsed && (
+            <p className="mt-2 px-3 text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+              &copy; 2026 Revival SA
+            </p>
+          )}
         </div>
       </aside>
     </>

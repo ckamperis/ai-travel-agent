@@ -18,7 +18,7 @@ interface AgentConfig {
   apiSource: string;
   icon: React.ReactNode;
   color: string;
-  statusColor: string;
+  statusBg: string;
   statusLabel: string;
   lastUsed: string;
   enabled: boolean;
@@ -33,7 +33,7 @@ const INITIAL_AGENTS: AgentConfig[] = [
     apiSource: 'Duffel API',
     icon: <Plane size={20} />,
     color: '#22D3EE',
-    statusColor: 'bg-green',
+    statusBg: 'var(--color-green)',
     statusLabel: 'Connected',
     lastUsed: '2 hours ago',
     enabled: true,
@@ -46,7 +46,7 @@ const INITIAL_AGENTS: AgentConfig[] = [
     apiSource: 'Mock Data',
     icon: <Building2 size={20} />,
     color: '#F59E0B',
-    statusColor: 'bg-amber',
+    statusBg: 'var(--color-amber)',
     statusLabel: 'Mock',
     lastUsed: '2 hours ago',
     enabled: true,
@@ -59,7 +59,7 @@ const INITIAL_AGENTS: AgentConfig[] = [
     apiSource: 'GPT-4o',
     icon: <Search size={20} />,
     color: '#10B981',
-    statusColor: 'bg-green',
+    statusBg: 'var(--color-green)',
     statusLabel: 'Connected',
     lastUsed: '2 hours ago',
     enabled: true,
@@ -72,7 +72,7 @@ const INITIAL_AGENTS: AgentConfig[] = [
     apiSource: 'Google Places API',
     icon: <MapPin size={20} />,
     color: '#A78BFA',
-    statusColor: 'bg-green',
+    statusBg: 'var(--color-green)',
     statusLabel: 'Connected',
     lastUsed: '3 hours ago',
     enabled: true,
@@ -85,7 +85,7 @@ const INITIAL_AGENTS: AgentConfig[] = [
     apiSource: 'GPT-4o',
     icon: <PenTool size={20} />,
     color: '#EC4899',
-    statusColor: 'bg-green',
+    statusBg: 'var(--color-green)',
     statusLabel: 'Connected',
     lastUsed: '2 hours ago',
     enabled: true,
@@ -106,12 +106,17 @@ export default function AgentsPage() {
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-1">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple/10">
-            <Bot size={18} className="text-purple" />
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-lg"
+            style={{ background: 'var(--color-purple-light)' }}
+          >
+            <Bot size={18} style={{ color: 'var(--color-purple)' }} />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Agents</h1>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>
+            Agents
+          </h1>
         </div>
-        <p className="text-sm text-foreground/40 ml-12">
+        <p className="text-sm ml-12" style={{ color: 'var(--color-text-muted)' }}>
           Manage the AI agents that power your travel assistant
         </p>
       </div>
@@ -121,7 +126,7 @@ export default function AgentsPage() {
         {agents.map((agent) => (
           <div
             key={agent.id}
-            className="glass-card p-5 transition-all duration-200 hover:border-card-border/40"
+            className="glass-card p-5 transition-all duration-200"
             style={{
               opacity: agent.enabled ? 1 : 0.5,
             }}
@@ -141,7 +146,7 @@ export default function AgentsPage() {
               {/* Content */}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-3">
-                  <h3 className="text-sm font-semibold text-foreground/90">
+                  <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
                     {agent.name}
                   </h3>
                   {/* API Badge */}
@@ -157,20 +162,21 @@ export default function AgentsPage() {
                   {/* Status Dot */}
                   <span className="flex items-center gap-1.5">
                     <span
-                      className={`h-2 w-2 rounded-full ${agent.statusColor}`}
+                      className="h-2 w-2 rounded-full"
+                      style={{ background: agent.statusBg }}
                     />
-                    <span className="text-[11px] text-foreground/35">
+                    <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
                       {agent.statusLabel}
                     </span>
                   </span>
                 </div>
 
-                <p className="mt-1 text-xs leading-relaxed text-foreground/40">
+                <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
                   {agent.description}
                 </p>
 
                 {/* Last used */}
-                <div className="mt-2 flex items-center gap-1 text-[11px] text-foreground/25">
+                <div className="mt-2 flex items-center gap-1 text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
                   <Clock size={10} />
                   Last used: {agent.lastUsed}
                 </div>
@@ -180,9 +186,12 @@ export default function AgentsPage() {
               <button
                 type="button"
                 onClick={() => toggleAgent(agent.id)}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer items-center rounded-full transition-colors ${
-                  agent.enabled ? 'bg-teal' : 'bg-foreground/15'
-                }`}
+                className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer items-center rounded-full transition-colors"
+                style={{
+                  background: agent.enabled
+                    ? 'var(--color-primary)'
+                    : 'var(--color-border)',
+                }}
               >
                 <span
                   className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
@@ -196,11 +205,21 @@ export default function AgentsPage() {
       </div>
 
       {/* Info */}
-      <div className="mt-6 rounded-lg border border-card-border/30 bg-navy-deep/30 px-5 py-4">
-        <p className="text-xs leading-relaxed text-foreground/30">
+      <div
+        className="mt-6 rounded-lg px-5 py-4"
+        style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
+      >
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
           Disabling an agent will skip it during email processing. The Composer
           agent requires at least one data agent to be active. All agents
           include built-in fallback data to ensure the demo never breaks.
+        </p>
+      </div>
+
+      {/* Footer */}
+      <div className="mt-8 text-center">
+        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          &copy; 2026 Revival SA — AI &amp; Business Intelligence
         </p>
       </div>
     </div>

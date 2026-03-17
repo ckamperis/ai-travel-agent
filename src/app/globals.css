@@ -1,40 +1,92 @@
 @import "tailwindcss";
 
+/* ================================================================
+   Light Fintech Theme + Dark Mode
+   ================================================================ */
+
 @theme inline {
-  --color-background: #0B1D3A;
-  --color-foreground: #E2E8F0;
-  --color-navy-deep: #070F1E;
-  --color-navy: #0B1D3A;
-  --color-navy-light: #0F2E5A;
-  --color-teal: #0891B2;
-  --color-cyan: #22D3EE;
-  --color-amber: #F59E0B;
+  /* Light mode defaults */
+  --color-bg: #FAFBFC;
+  --color-bg-secondary: #F3F4F6;
+  --color-surface: #FFFFFF;
+  --color-surface-hover: #F9FAFB;
+  --color-border: #E5E7EB;
+  --color-border-light: #F3F4F6;
+  --color-text: #111827;
+  --color-text-secondary: #6B7280;
+  --color-text-muted: #9CA3AF;
+
+  --color-primary: #0066FF;
+  --color-primary-light: #E8F0FE;
   --color-green: #10B981;
-  --color-purple: #A78BFA;
+  --color-green-light: #ECFDF5;
+  --color-amber: #F59E0B;
+  --color-amber-light: #FFFBEB;
+  --color-red: #EF4444;
+  --color-red-light: #FEF2F2;
+  --color-purple: #8B5CF6;
+  --color-purple-light: #F5F3FF;
   --color-pink: #EC4899;
-  --color-card: rgba(15, 46, 90, 0.5);
-  --color-card-border: rgba(8, 145, 178, 0.12);
+  --color-cyan: #06B6D4;
+
+  --color-sidebar: #FFFFFF;
+  --color-sidebar-active: #EFF6FF;
+  --color-sidebar-text: #374151;
+  --color-sidebar-muted: #9CA3AF;
+
+  --color-card: #FFFFFF;
+  --color-card-border: #E5E7EB;
 
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
+/* ================================================================
+   Base
+   ================================================================ */
+
 body {
-  background: linear-gradient(160deg, #070F1E 0%, #0B1D3A 40%, #0F2E5A 70%, #0B1D3A 100%);
-  color: var(--color-foreground);
+  background: var(--color-bg);
+  color: var(--color-text);
   font-family: var(--font-sans);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.2s, color 0.2s;
 }
 
-/* Keyframe animations */
+/* ================================================================
+   Dark Mode
+   ================================================================ */
+
+.dark body, .dark {
+  --color-bg: #0F172A;
+  --color-bg-secondary: #1E293B;
+  --color-surface: #1E293B;
+  --color-surface-hover: #253449;
+  --color-border: #334155;
+  --color-border-light: #1E293B;
+  --color-text: #F1F5F9;
+  --color-text-secondary: #94A3B8;
+  --color-text-muted: #64748B;
+  --color-primary-light: #172554;
+  --color-green-light: #052e16;
+  --color-amber-light: #422006;
+  --color-red-light: #450a0a;
+  --color-purple-light: #2e1065;
+  --color-sidebar: #1E293B;
+  --color-sidebar-active: #253449;
+  --color-sidebar-text: #E2E8F0;
+  --color-sidebar-muted: #64748B;
+  --color-card: #1E293B;
+  --color-card-border: #334155;
+}
+
+/* ================================================================
+   Animations
+   ================================================================ */
+
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes fadeInDown {
-  from { opacity: 0; transform: translateY(-12px); }
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -43,19 +95,14 @@ body {
   to { opacity: 1; }
 }
 
-@keyframes slideInLeft {
-  from { opacity: 0; transform: translateX(-24px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
 @keyframes slideInRight {
-  from { opacity: 0; transform: translateX(24px); }
+  from { opacity: 0; transform: translateX(16px); }
   to { opacity: 1; transform: translateX(0); }
 }
 
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 4px rgba(8, 145, 178, 0.2); }
-  50% { box-shadow: 0 0 12px rgba(8, 145, 178, 0.4); }
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @keyframes blink {
@@ -68,65 +115,61 @@ body {
   to { transform: rotate(360deg); }
 }
 
-@keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.85); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-.animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
-.animate-fade-in-down { animation: fadeInDown 0.4s ease-out forwards; }
-.animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
-.animate-slide-in-left { animation: slideInLeft 0.4s ease-out forwards; }
-.animate-slide-in-right { animation: slideInRight 0.4s ease-out forwards; }
-.animate-scale-in { animation: scaleIn 0.3s ease-out forwards; }
-.animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+.animate-fade-in-up { animation: fadeInUp 0.35s ease-out forwards; }
+.animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+.animate-slide-in-right { animation: slideInRight 0.3s ease-out forwards; }
+.animate-scale-in { animation: scaleIn 0.2s ease-out forwards; }
 .animate-blink { animation: blink 1s step-end infinite; }
 .animate-spin { animation: spin 1s linear infinite; }
 
-/* Stagger delays */
-.stagger-1 { animation-delay: 0.1s; opacity: 0; }
-.stagger-2 { animation-delay: 0.2s; opacity: 0; }
-.stagger-3 { animation-delay: 0.3s; opacity: 0; }
-.stagger-4 { animation-delay: 0.4s; opacity: 0; }
-.stagger-5 { animation-delay: 0.5s; opacity: 0; }
-.stagger-6 { animation-delay: 0.6s; opacity: 0; }
+.stagger-1 { animation-delay: 0.05s; opacity: 0; }
+.stagger-2 { animation-delay: 0.1s; opacity: 0; }
+.stagger-3 { animation-delay: 0.15s; opacity: 0; }
+.stagger-4 { animation-delay: 0.2s; opacity: 0; }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(8, 145, 178, 0.25); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(8, 145, 178, 0.4); }
+/* ================================================================
+   Cards & Surfaces
+   ================================================================ */
 
-/* Glass card */
+.card {
+  background: var(--color-card);
+  border: 1px solid var(--color-card-border);
+  border-radius: 12px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.card:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-card-border));
+}
+
+/* Legacy glass-card → maps to .card */
 .glass-card {
-  background: rgba(15, 46, 90, 0.45);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(8, 145, 178, 0.1);
-  border-radius: 10px;
+  background: var(--color-card);
+  border: 1px solid var(--color-card-border);
+  border-radius: 12px;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-/* Gradient text */
-.gradient-text {
-  background: linear-gradient(135deg, #22D3EE, #0891B2);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
+/* ================================================================
+   Scrollbar
+   ================================================================ */
 
-/* Line clamp */
-.line-clamp-1 {
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
 
-/* Select & input color scheme */
+/* ================================================================
+   Form Controls
+   ================================================================ */
+
 select, input[type="date"], input[type="number"] {
+  color-scheme: light;
+}
+.dark select, .dark input[type="date"], .dark input[type="number"] {
   color-scheme: dark;
 }
 
-/* Range slider */
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
@@ -136,7 +179,7 @@ input[type="range"] {
 }
 input[type="range"]::-webkit-slider-track {
   height: 4px;
-  background: rgba(255,255,255,0.08);
+  background: var(--color-border);
   border-radius: 2px;
 }
 input[type="range"]::-webkit-slider-thumb {
@@ -144,11 +187,28 @@ input[type="range"]::-webkit-slider-thumb {
   height: 16px;
   width: 16px;
   border-radius: 50%;
-  background: #0891B2;
+  background: var(--color-primary);
   margin-top: -6px;
 }
 
-/* Checkbox accent */
 input[type="checkbox"] {
-  accent-color: #0891B2;
+  accent-color: var(--color-primary);
+}
+
+/* ================================================================
+   Utility
+   ================================================================ */
+
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }

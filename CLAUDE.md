@@ -76,9 +76,12 @@ ai-travel-agent/
 │   │       └── follow-up-compose/route.ts  # SSE: generate follow-up email
 │   ├── agents/                       # (unchanged from before)
 │   ├── components/
-│   │   ├── Sidebar.tsx               # Navigation sidebar (9 items)
+│   │   ├── Sidebar.tsx               # Collapsible navigation sidebar (9 items)
+│   │   ├── Header.tsx                # Top header: breadcrumb, notifications, profile, theme toggle
+│   │   ├── ThemeProvider.tsx          # Dark/light mode context + localStorage
+│   │   ├── MapView.tsx                # Google Maps component (hotel/place pins)
 │   │   ├── Breadcrumb.tsx            # Breadcrumb navigation
-│   │   └── Toast.tsx                 # Toast notification system
+│   │   └── Toast.tsx                 # Toast notification system (top-right)
 │   ├── lib/
 │   │   ├── settings.ts              # Settings, Profile, Templates, History, Customers, Follow-ups
 │   │   ├── ai.ts                     # OpenAI: compose, translate, follow-up (no markdown)
@@ -331,18 +334,23 @@ The text area is pre-filled with a German couple's Greece trip request, but the 
 whatever origin, destination, dates, language, and interests are in the email.
 
 ## Design System
-- **Background:** Dark navy gradient (#0B1D3A → #0F2E5A)
-- **Primary accent:** Teal (#0891B2)
-- **Secondary accent:** Cyan (#22D3EE)
-- **Agent colors:**
-  - Email Analyzer: #0891B2 (teal)
-  - Flight Agent: #22D3EE (cyan)
-  - Hotel Agent: #F59E0B (amber)
-  - Research Agent: #10B981 (green)
-  - Places Agent: #A78BFA (purple)
-  - Composer Agent: #EC4899 (pink)
-- **Fonts:** System UI / Inter for body, Georgia for headings
-- **Target resolution:** 1920x1080 (projector)
+Light fintech theme (Stripe/Linear-inspired) with dark mode toggle.
+
+**Light mode (default):**
+- Background: #FAFBFC | Surface: #FFFFFF | Border: #E5E7EB
+- Primary: #0066FF (crisp blue) | Green: #10B981 | Amber: #F59E0B | Red: #EF4444
+- Text: #111827 / #6B7280 / #9CA3AF (primary/secondary/muted)
+
+**Dark mode:**
+- Background: #0F172A | Surface: #1E293B | Border: #334155
+- Same accents, slightly brighter
+
+**Layout:** Sidebar (collapsible) + top header bar (notifications, profile dropdown, theme toggle)
+**Fonts:** Inter / system-ui
+**Maps:** Google Maps via @vis.gl/react-google-maps (hotel pins, place pins)
+**Branding:** "© 2026 Revival SA — AI & Business Intelligence" (sidebar footer + email footer)
+- CSS variables throughout for theme-switching
+- All styling via `style={{ color: 'var(--color-text)' }}` pattern
 
 ## Important Rules
 - **No markdown in emails:** Composer prompt explicitly forbids markdown. stripMarkdown() post-processes output.
@@ -354,4 +362,5 @@ whatever origin, destination, dates, language, and interests are in the email.
 - **No fake delays:** All timing from real API calls.
 - **Settings-aware:** Composer respects language, tone, signature, response length, content toggles.
 - **Budget per-night:** Email analyzer explicitly returns per-night budget.
-- **Design:** Dark navy theme, Linear/Vercel dashboard feel.
+- **Design:** Light fintech theme + dark mode. CSS variables. Google Maps integration.
+- **Branding:** Revival SA footer. Blue primary accent (#0066FF).

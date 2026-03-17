@@ -47,6 +47,8 @@ export interface HotelResult {
   metroDistance: string;
   amenities: string[];
   highlights: string;
+  lat?: number;
+  lng?: number;
 }
 
 export interface PlaceResult {
