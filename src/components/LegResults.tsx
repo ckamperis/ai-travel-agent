@@ -58,6 +58,7 @@ interface LegResultsProps {
   onTogglePlace: (name: string) => void;
   legNights?: number;
   travelers?: { adults: number; children: number };
+  isReturnFlight?: boolean;
 }
 
 export default function LegResults({
@@ -65,7 +66,7 @@ export default function LegResults({
   agentStatuses, agentTimes, agentSources,
   selectedFlightIdx, selectedHotelIdx, includedPlaces,
   onSelectFlight, onSelectHotel, onTogglePlace,
-  legNights, travelers,
+  legNights, travelers, isReturnFlight,
 }: LegResultsProps) {
   const [activeTab, setActiveTab] = useState<'flights' | 'hotels' | 'itinerary' | 'places' | 'compare'>('flights');
   const [flightSort, setFlightSort] = useState<'price' | 'duration' | 'stops'>('price');
@@ -119,10 +120,12 @@ export default function LegResults({
       <div className="flex gap-1 border-b mb-6 overflow-x-auto" style={{ borderColor: 'var(--color-border)' }}>
         {([
           { key: 'flights' as const, label: 'Flights', icon: Plane, color: '#22D3EE', count: flights.length },
-          { key: 'hotels' as const, label: 'Hotels', icon: Building2, color: '#F59E0B', count: hotels.length },
-          { key: 'itinerary' as const, label: 'Itinerary', icon: Search, color: '#10B981', count: null },
-          { key: 'places' as const, label: 'Places', icon: MapPin, color: '#A78BFA', count: places.length },
-          { key: 'compare' as const, label: 'Compare', icon: BarChart3, color: '#EC4899', count: combos.length > 0 ? combos.length : null },
+          ...(!isReturnFlight ? [
+            { key: 'hotels' as const, label: 'Hotels', icon: Building2, color: '#F59E0B', count: hotels.length },
+            { key: 'itinerary' as const, label: 'Itinerary', icon: Search, color: '#10B981', count: null as number | null },
+            { key: 'places' as const, label: 'Places', icon: MapPin, color: '#A78BFA', count: places.length },
+            { key: 'compare' as const, label: 'Compare', icon: BarChart3, color: '#EC4899', count: combos.length > 0 ? combos.length : null },
+          ] : []),
         ]).map(tab => {
           const agentKey = tab.key === 'itinerary' ? 'research' : tab.key === 'compare' ? '' : tab.key;
           return (

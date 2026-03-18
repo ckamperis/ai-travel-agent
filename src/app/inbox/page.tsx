@@ -744,6 +744,7 @@ export default function InboxPage() {
 
           {/* ---- LegResults for active tab ---- */}
           <LegResults
+            key={activeLegTab}
             flights={currentLeg.flights}
             hotels={currentLeg.hotels}
             research={currentLeg.research}
@@ -763,6 +764,7 @@ export default function InboxPage() {
             }))}
             legNights={isMultiLeg ? (editedLegs[activeLegTab]?.nights || analysis?.dates.duration || 1) : (analysis?.dates.duration || 1)}
             travelers={analysis?.travelers}
+            isReturnFlight={isMultiLeg && activeLegTab === legStates.length - 1}
           />
 
           {/* Bottom actions */}
