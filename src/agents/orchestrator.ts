@@ -22,7 +22,7 @@ function getAgentSource(agent: AgentName): 'live' | 'mock' {
   switch (agent) {
     case 'email': return process.env.OPENAI_API_KEY ? 'live' : 'mock';
     case 'flight': return process.env.DUFFEL_API_KEY ? 'live' : 'mock';
-    case 'hotel': return 'mock';
+    case 'hotel': return process.env.OPENAI_API_KEY ? 'live' : 'mock';
     case 'research': return process.env.OPENAI_API_KEY ? 'live' : 'mock';
     case 'places': return process.env.GOOGLE_PLACES_API_KEY ? 'live' : 'mock';
     default: return 'mock';

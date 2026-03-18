@@ -4,9 +4,9 @@ import { useState, useRef } from 'react';
 import {
   Plane, Building2, Search, MapPin, Loader2, CheckCircle,
   Star, TrainFront, ChevronDown, ChevronUp, ExternalLink,
-  BarChart3, CloudSun, Check, Radio,
+  BarChart3, CloudSun, Check, Radio, Clock, Briefcase,
 } from 'lucide-react';
-import type { EmailAnalysis, FlightResult, HotelResult, PlaceResult } from '@/agents/types';
+import type { FlightResult, HotelResult, PlaceResult } from '@/agents/types';
 import type { WeatherDay } from '@/lib/weather';
 import MapView from '@/components/MapView';
 
@@ -16,6 +16,7 @@ type AgentStatus = 'idle' | 'active' | 'done' | 'error';
 
 function fmtTime(ms: number) { return `${(ms / 1000).toFixed(1)}s`; }
 function fmtClock(iso: string) { try { return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }); } catch { return iso; } }
+function fmtDate(iso: string) { try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); } catch { return iso; } }
 
 function parseResearchDays(text: string) {
   const lines = text.split('\n').filter(l => l.trim());
@@ -40,7 +41,6 @@ function LiveBadge({ source }: { source?: 'live' | 'mock' }) {
 /* ---------------------------------------------------------------- */
 
 interface LegResultsProps {
-  analysis: EmailAnalysis | null;
   flights: FlightResult[];
   hotels: HotelResult[];
   research: string;
@@ -55,20 +55,27 @@ interface LegResultsProps {
   onSelectFlight: (idx: number) => void;
   onSelectHotel: (idx: number) => void;
   onTogglePlace: (name: string) => void;
+  legNights?: number;
+  travelers?: { adults: number; children: number };
 }
 
 export default function LegResults({
-  analysis, flights, hotels, research, places, weather,
+  flights, hotels, research, places, weather,
   agentStatuses, agentTimes, agentSources,
   selectedFlightIdx, selectedHotelIdx, includedPlaces,
   onSelectFlight, onSelectHotel, onTogglePlace,
+  legNights, travelers,
 }: LegResultsProps) {
   const [activeTab, setActiveTab] = useState<'flights' | 'hotels' | 'itinerary' | 'places' | 'compare'>('flights');
   const [flightSort, setFlightSort] = useState<'price' | 'duration' | 'stops'>('price');
   const [expandedDays, setExpandedDays] = useState<Set<number>>(new Set());
   const [hoveredHotelIdx, setHoveredHotelIdx] = useState(-1);
   const [focusedPlaceIdx, setFocusedPlaceIdx] = useState(-1);
+  const [expandedFlightIdx, setExpandedFlightIdx] = useState(-1);
   const placeRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  const pax = travelers ? travelers.adults + travelers.children : 1;
+  const nights = legNights || 1;
 
   const sortedFlights = [...flights].sort((a, b) => {
     if (flightSort === 'price') return a.price - b.price;
@@ -76,15 +83,15 @@ export default function LegResults({
     return a.duration.localeCompare(b.duration);
   });
 
-  const combos = analysis ? flights.flatMap((f, fi) =>
+  const combos = flights.flatMap((f, fi) =>
     hotels.map((h, hi) => ({
       fi, hi, airline: f.airline, hotel: h.name,
-      flightTotal: f.price * analysis.travelers.adults,
-      hotelTotal: h.pricePerNight * analysis.dates.duration,
-      total: f.price * analysis.travelers.adults + h.pricePerNight * analysis.dates.duration,
+      flightTotal: f.price * pax,
+      hotelTotal: h.pricePerNight * nights,
+      total: f.price * pax + h.pricePerNight * nights,
       hotelRating: h.rating,
     }))
-  ).sort((a, b) => a.total - b.total) : [];
+  ).sort((a, b) => a.total - b.total);
 
   const hotelLocs = hotels
     .map((h, i) => (h.lat != null && h.lng != null ? { lat: h.lat, lng: h.lng, label: h.name, idx: i } : null))
@@ -137,8 +144,8 @@ export default function LegResults({
         {flights.length > 0 && (<div>
           <div className="flex gap-2 mb-3"><span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Sort:</span>{(['price', 'duration', 'stops'] as const).map(s => (<button key={s} onClick={() => setFlightSort(s)} className="text-xs cursor-pointer transition-colors" style={{ color: flightSort === s ? 'var(--color-primary)' : 'var(--color-text-muted)', fontWeight: flightSort === s ? 500 : 400 }}>{s.charAt(0).toUpperCase() + s.slice(1)}</button>))}</div>
           <div className="glass-card overflow-hidden"><table className="w-full text-sm"><thead><tr className="border-b text-left text-[11px] uppercase tracking-wider" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}><th className="w-10 px-4 py-2.5" /><th className="px-4 py-2.5 font-medium">Airline</th><th className="px-4 py-2.5 font-medium">Departure</th><th className="px-4 py-2.5 font-medium">Arrival</th><th className="px-4 py-2.5 font-medium">Stops</th><th className="px-4 py-2.5 font-medium">Duration</th><th className="px-4 py-2.5 font-medium text-right">Price</th></tr></thead>
-          <tbody>{sortedFlights.map((f, i) => { const origIdx = flights.indexOf(f); return (
-            <tr key={i} onClick={() => onSelectFlight(origIdx)} className="border-b last:border-0 cursor-pointer transition-all" style={{ borderColor: 'var(--color-border)', background: origIdx === selectedFlightIdx ? 'var(--color-primary-light)' : undefined }}>
+          <tbody>{sortedFlights.map((f, i) => { const origIdx = flights.indexOf(f); const isExpanded = origIdx === expandedFlightIdx && origIdx === selectedFlightIdx; return (<>
+            <tr key={`row-${i}`} onClick={() => { onSelectFlight(origIdx); setExpandedFlightIdx(origIdx === expandedFlightIdx ? -1 : origIdx); }} className="border-b last:border-0 cursor-pointer transition-all" style={{ borderColor: 'var(--color-border)', background: origIdx === selectedFlightIdx ? 'var(--color-primary-light)' : undefined }}>
               <td className="px-4 py-3"><div className="flex h-5 w-5 items-center justify-center rounded-full border" style={{ borderColor: origIdx === selectedFlightIdx ? 'var(--color-primary)' : 'var(--color-border)', background: origIdx === selectedFlightIdx ? 'var(--color-primary-light)' : undefined }}>{origIdx === selectedFlightIdx && <Check size={12} style={{ color: 'var(--color-primary)' }} />}</div></td>
               <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text)' }}>{f.airline}</td>
               <td className="px-4 py-3 tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>{fmtClock(f.departureTime)}</td>
@@ -146,7 +153,45 @@ export default function LegResults({
               <td className="px-4 py-3">{f.stops === 0 ? <span style={{ color: 'var(--color-green)' }}>Direct</span> : <span style={{ color: 'var(--color-text-secondary)' }}>{f.stops} stop{f.stops > 1 ? 's' : ''}</span>}</td>
               <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>{f.duration}</td>
               <td className="px-4 py-3 text-right font-semibold tabular-nums" style={{ color: origIdx === selectedFlightIdx ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>{f.price}€</td>
-            </tr>); })}</tbody></table></div>
+            </tr>
+            {/* Expanded flight details panel */}
+            {isExpanded && (
+              <tr key={`detail-${i}`}><td colSpan={7} className="px-0 py-0">
+                <div className="overflow-hidden transition-all" style={{ background: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border)' }}>
+                  <div className="px-6 py-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--color-text-muted)' }}><Plane size={10} /> Route</div>
+                      <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{f.origin} → {f.destination}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>{fmtDate(f.departureTime)}</p>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--color-text-muted)' }}><Clock size={10} /> Times</div>
+                      <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{fmtClock(f.departureTime)} → {fmtClock(f.arrivalTime)}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>Duration: {f.duration} · {f.stops === 0 ? 'Direct' : `${f.stops} stop${f.stops > 1 ? 's' : ''}`}</p>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--color-text-muted)' }}><Briefcase size={10} /> Details</div>
+                      <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{f.airline}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>Economy · Checked bag included</p>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--color-text-muted)' }}><BarChart3 size={10} /> Total Price</div>
+                      <p className="text-sm font-medium" style={{ color: 'var(--color-primary)' }}>{f.price}€/person × {pax} = {f.price * pax}€</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>All taxes included</p>
+                    </div>
+                  </div>
+                </div>
+              </td></tr>
+            )}
+          </>); })}</tbody></table></div>
+
+          {/* Per-leg pricing summary below flight table */}
+          {selectedFlightIdx >= 0 && flights[selectedFlightIdx] && (
+            <div className="mt-3 flex items-center gap-4 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              <Plane size={12} style={{ color: 'var(--color-primary)' }} />
+              <span>{flights[selectedFlightIdx].airline}: <b style={{ color: 'var(--color-text)' }}>{flights[selectedFlightIdx].price}€/person × {pax} {pax === 1 ? 'traveler' : 'travelers'} = {flights[selectedFlightIdx].price * pax}€</b></span>
+            </div>
+          )}
         </div>)}
       </div>)}
 
@@ -170,6 +215,14 @@ export default function LegResults({
             <div className="mt-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>{h.amenities?.join(' · ')}</div>
             <div className="mt-3 flex items-center justify-between border-t pt-3" style={{ borderColor: 'var(--color-border)' }}><div className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--color-text-secondary)' }}><TrainFront size={11} />{h.metroStation} ({h.metroDistance})</div><div className="text-sm font-semibold" style={{ color: 'var(--color-amber)' }}>{h.pricePerNight}€<span className="ml-0.5 text-[10px] font-normal" style={{ color: 'var(--color-text-muted)' }}>/night</span></div></div>
           </div>))}</div>)}
+
+        {/* Per-leg pricing summary below hotel cards */}
+        {selectedHotelIdx >= 0 && hotels[selectedHotelIdx] && (
+          <div className="mt-3 flex items-center gap-4 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+            <Building2 size={12} style={{ color: 'var(--color-amber)' }} />
+            <span>{hotels[selectedHotelIdx].name}: <b style={{ color: 'var(--color-text)' }}>{hotels[selectedHotelIdx].pricePerNight}€/night × {nights} night{nights !== 1 ? 's' : ''} = {hotels[selectedHotelIdx].pricePerNight * nights}€</b></span>
+          </div>
+        )}
       </div>)}
 
       {/* ITINERARY */}
@@ -234,8 +287,8 @@ export default function LegResults({
         {combos.length === 0 && <div className="py-12 text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>Waiting for flight and hotel results...</div>}
         {combos.length > 0 && (<div className="glass-card overflow-hidden"><table className="w-full text-sm"><thead><tr className="border-b text-left text-[11px] uppercase tracking-wider" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
           <th className="px-4 py-2.5 font-medium">Flight</th><th className="px-4 py-2.5 font-medium">Hotel</th>
-          <th className="px-4 py-2.5 font-medium text-right">Flights ({analysis?.travelers.adults}p)</th>
-          <th className="px-4 py-2.5 font-medium text-right">Hotel ({analysis?.dates.duration}n)</th>
+          <th className="px-4 py-2.5 font-medium text-right">Flights ({pax}p)</th>
+          <th className="px-4 py-2.5 font-medium text-right">Hotel ({nights}n)</th>
           <th className="px-4 py-2.5 font-medium text-right">Total</th><th className="px-4 py-2.5 font-medium">Rating</th><th className="w-20 px-4 py-2.5" />
         </tr></thead><tbody>
           {combos.slice(0, 12).map((c, i) => {

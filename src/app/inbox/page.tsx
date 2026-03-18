@@ -21,7 +21,6 @@ import { stripMarkdown } from '@/lib/markdown-strip';
 import { emailToHtml } from '@/lib/email-to-html';
 import { getWeather, type WeatherDay } from '@/lib/weather';
 import LegResults from '@/components/LegResults';
-import { MOCK_MULTI_LEG_ANALYSIS, getMockLegData, MOCK_RETURN_FLIGHTS } from '@/lib/mock-multi-leg';
 
 /* ================================================================ */
 
@@ -133,8 +132,6 @@ function extractEmail(text: string): string {
   const m = text.match(/[\w.+-]+@[\w.-]+\.\w+/);
   return m ? m[0] : '';
 }
-const delay = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
-
 const INPUT_CLS = 'w-full rounded-lg border px-4 py-2.5 text-sm outline-none transition-colors';
 const INPUT_STYLE: React.CSSProperties = { background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
 
@@ -215,20 +212,6 @@ export default function InboxPage() {
       if (email) { const c = findCustomerByEmail(email); if (c) setKnownCustomer(c); }
     }
 
-    // Multi-leg mock: bypass API for multi-leg sample
-    if (sampleId === 'greece-multi') {
-      await delay(800); // simulate analysis time
-      const a = MOCK_MULTI_LEG_ANALYSIS;
-      setAnalysis(a);
-      setEdited(toEditable(a));
-      setEditedLegs(toEditableLegs(a.legs || []));
-      setAnalysisSource('mock');
-      setAnalysisTime(Date.now() - startTimeRef.current);
-      setAnalysisLoading(false);
-      addToast('Email analyzed — multi-leg trip detected', 'success');
-      return;
-    }
-
     try {
       const res = await fetch('/api/orchestrate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: text, mode: 'analyze' }) });
       if (!res.ok || !res.body) throw new Error('Analysis failed');
@@ -263,78 +246,6 @@ export default function InboxPage() {
     finally { setAnalysisLoading(false); }
   }, [addToast, settings]);
 
-  /* ---- Multi-leg mock SSE simulation ---- */
-  const simulateMultiLegSearch = useCallback(async (legs: EditableLeg[], originIATA: string) => {
-    const totalLegs = legs.length + 1; // +1 for return flight
-    const newLegStates = Array.from({ length: totalLegs }, () => createEmptyLegState());
-    setLegStates(newLegStates);
-
-    for (let i = 0; i < totalLegs; i++) {
-      const isReturn = i === legs.length;
-      const prevIATA = i === 0 ? originIATA : legs[i - 1].destinationIATA;
-
-      if (isReturn) {
-        // Return flight
-        setLegStates(prev => prev.map((ls, j) => j !== i ? ls : { ...ls, agentStatuses: { ...ls.agentStatuses, flight: 'active' } }));
-        await delay(500 + Math.random() * 300);
-        setLegStates(prev => prev.map((ls, j) => j !== i ? ls : {
-          ...ls, flights: MOCK_RETURN_FLIGHTS,
-          agentStatuses: { flight: 'done', hotel: 'done', research: 'done', places: 'done' },
-          agentTimes: { flight: 500 + Math.floor(Math.random() * 300) },
-          agentSources: { flight: 'mock' },
-        }));
-        continue;
-      }
-
-      const leg = legs[i];
-      const mockData = getMockLegData(leg.destination, leg.destinationIATA, prevIATA);
-
-      // Flight
-      setLegStates(prev => prev.map((ls, j) => j !== i ? ls : { ...ls, agentStatuses: { ...ls.agentStatuses, flight: 'active' } }));
-      await delay(400 + Math.random() * 300);
-      setLegStates(prev => prev.map((ls, j) => j !== i ? ls : {
-        ...ls, flights: mockData.flights,
-        agentStatuses: { ...ls.agentStatuses, flight: 'done' },
-        agentTimes: { ...ls.agentTimes, flight: 400 + Math.floor(Math.random() * 300) },
-        agentSources: { ...ls.agentSources, flight: 'mock' },
-      }));
-
-      // Hotel
-      setLegStates(prev => prev.map((ls, j) => j !== i ? ls : { ...ls, agentStatuses: { ...ls.agentStatuses, hotel: 'active' } }));
-      await delay(300 + Math.random() * 300);
-      setLegStates(prev => prev.map((ls, j) => j !== i ? ls : {
-        ...ls, hotels: mockData.hotels,
-        agentStatuses: { ...ls.agentStatuses, hotel: 'done' },
-        agentTimes: { ...ls.agentTimes, hotel: 300 + Math.floor(Math.random() * 300) },
-        agentSources: { ...ls.agentSources, hotel: 'mock' },
-      }));
-
-      // Research
-      setLegStates(prev => prev.map((ls, j) => j !== i ? ls : { ...ls, agentStatuses: { ...ls.agentStatuses, research: 'active' } }));
-      await delay(500 + Math.random() * 400);
-      setLegStates(prev => prev.map((ls, j) => j !== i ? ls : {
-        ...ls, research: mockData.research,
-        agentStatuses: { ...ls.agentStatuses, research: 'done' },
-        agentTimes: { ...ls.agentTimes, research: 500 + Math.floor(Math.random() * 400) },
-        agentSources: { ...ls.agentSources, research: 'mock' },
-      }));
-
-      // Places
-      setLegStates(prev => prev.map((ls, j) => j !== i ? ls : { ...ls, agentStatuses: { ...ls.agentStatuses, places: 'active' } }));
-      await delay(300 + Math.random() * 200);
-      setLegStates(prev => prev.map((ls, j) => j !== i ? ls : {
-        ...ls, places: mockData.places, includedPlaces: new Set(mockData.places.map(p => p.name)),
-        agentStatuses: { ...ls.agentStatuses, places: 'done' },
-        agentTimes: { ...ls.agentTimes, places: 300 + Math.floor(Math.random() * 200) },
-        agentSources: { ...ls.agentSources, places: 'mock' },
-      }));
-
-      addToast(`${leg.destination} — all agents complete`, 'success');
-    }
-
-    addToast('All legs searched', 'success');
-  }, [addToast]);
-
   /* ---- Step 2 → 3 ---- */
   const confirmAndSearch = useCallback(async () => {
     if (!edited) return;
@@ -348,10 +259,14 @@ export default function InboxPage() {
     setActiveLegTab(0);
     startTimeRef.current = Date.now();
 
-    if (editedLegs.length > 1) {
-      // Multi-leg: mock SSE simulation
-      simulateMultiLegSearch(editedLegs, edited.originIATA);
-      // Weather per leg
+    const isMultiLegTrip = editedLegs.length > 1;
+    const totalLegSlots = isMultiLegTrip ? editedLegs.length + 1 : 1; // +1 for return flight
+    const newLegStates = Array.from({ length: totalLegSlots }, () => createEmptyLegState());
+    setLegStates(newLegStates);
+    agentStartRef.current = {};
+
+    // Weather
+    if (isMultiLegTrip) {
       let dayOffset = 0;
       for (let i = 0; i < editedLegs.length; i++) {
         const leg = editedLegs[i];
@@ -365,64 +280,70 @@ export default function InboxPage() {
         dayOffset += leg.nights;
       }
     } else {
-      // Single-dest: existing SSE flow
-      const newLegStates = [createEmptyLegState()];
-      setLegStates(newLegStates);
-      agentStartRef.current = {};
-
-      // Weather
       getWeather(finalAnalysis.destination, finalAnalysis.dates.start, Math.min(finalAnalysis.dates.duration, 7))
         .then(w => setLegStates(prev => prev.map((ls, j) => j === 0 ? { ...ls, weather: w } : ls)))
         .catch(() => {});
-
-      try {
-        const res = await fetch('/api/orchestrate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: emailText, mode: 'search', analysis: finalAnalysis }) });
-        if (!res.ok || !res.body) throw new Error('Search failed');
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n'); buffer = lines.pop() || '';
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const payload = line.slice(6).trim();
-            if (payload === '[DONE]') continue;
-            try {
-              const ev = JSON.parse(payload);
-              const { agent, status, message, data, source } = ev;
-              const legIndex = ev.legIndex ?? 0;
-              if (agent === 'email') continue;
-              if (status === 'started') {
-                agentStartRef.current[`${legIndex}-${agent}`] = Date.now();
-                setLegStates(prev => prev.map((ls, j) => j !== legIndex ? ls : { ...ls, agentStatuses: { ...ls.agentStatuses, [agent]: 'active' }, agentMessages: { ...ls.agentMessages, [agent]: message } }));
-              } else if (status === 'done') {
-                const elapsed = Date.now() - (agentStartRef.current[`${legIndex}-${agent}`] || Date.now());
-                setLegStates(prev => prev.map((ls, j) => {
-                  if (j !== legIndex) return ls;
-                  const updated: Partial<LegState> = {
-                    agentStatuses: { ...ls.agentStatuses, [agent]: 'done' },
-                    agentMessages: { ...ls.agentMessages, [agent]: message },
-                    agentTimes: { ...ls.agentTimes, [agent]: elapsed },
-                    agentSources: source ? { ...ls.agentSources, [agent]: source } : ls.agentSources,
-                  };
-                  if (agent === 'flight') { updated.flights = (data as FlightResult[]) || []; addToast(`${((data as FlightResult[]) || []).length} flights found`, 'success'); }
-                  if (agent === 'hotel') { updated.hotels = (data as HotelResult[]) || []; addToast(`${((data as HotelResult[]) || []).length} hotels found`, 'success'); }
-                  if (agent === 'research') { updated.research = stripMarkdown((data as string) || ''); }
-                  if (agent === 'places') { const p = (data as PlaceResult[]) || []; updated.places = p; updated.includedPlaces = new Set(p.map(pl => pl.name)); }
-                  return { ...ls, ...updated };
-                }));
-              } else if (status === 'error') {
-                setLegStates(prev => prev.map((ls, j) => j !== legIndex ? ls : { ...ls, agentStatuses: { ...ls.agentStatuses, [agent]: 'error' } }));
-              }
-            } catch { /* skip */ }
-          }
-        }
-      } catch { addToast('Agent search failed', 'error'); }
     }
-  }, [edited, editedLegs, emailText, addToast, simulateMultiLegSearch]);
+
+    // SSE flow — works for both single-leg and multi-leg
+    try {
+      const res = await fetch('/api/orchestrate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: emailText, mode: 'search', analysis: finalAnalysis }) });
+      if (!res.ok || !res.body) throw new Error('Search failed');
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n'); buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6).trim();
+          if (payload === '[DONE]') continue;
+          try {
+            const ev = JSON.parse(payload);
+            const { agent, status, message, data, source } = ev;
+            const legIndex = ev.legIndex ?? 0;
+            if (agent === 'email') continue;
+
+            // Ensure leg state slot exists
+            setLegStates(prev => {
+              if (legIndex >= prev.length) {
+                const extended = [...prev];
+                while (extended.length <= legIndex) extended.push(createEmptyLegState());
+                return extended;
+              }
+              return prev;
+            });
+
+            if (status === 'started') {
+              agentStartRef.current[`${legIndex}-${agent}`] = Date.now();
+              setLegStates(prev => prev.map((ls, j) => j !== legIndex ? ls : { ...ls, agentStatuses: { ...ls.agentStatuses, [agent]: 'active' }, agentMessages: { ...ls.agentMessages, [agent]: message } }));
+            } else if (status === 'done') {
+              const elapsed = Date.now() - (agentStartRef.current[`${legIndex}-${agent}`] || Date.now());
+              setLegStates(prev => prev.map((ls, j) => {
+                if (j !== legIndex) return ls;
+                const updated: Partial<LegState> = {
+                  agentStatuses: { ...ls.agentStatuses, [agent]: 'done' },
+                  agentMessages: { ...ls.agentMessages, [agent]: message },
+                  agentTimes: { ...ls.agentTimes, [agent]: elapsed },
+                  agentSources: source ? { ...ls.agentSources, [agent]: source } : ls.agentSources,
+                };
+                if (agent === 'flight') { updated.flights = (data as FlightResult[]) || []; }
+                if (agent === 'hotel') { updated.hotels = (data as HotelResult[]) || []; }
+                if (agent === 'research') { updated.research = stripMarkdown((data as string) || ''); }
+                if (agent === 'places') { const p = (data as PlaceResult[]) || []; updated.places = p; updated.includedPlaces = new Set(p.map(pl => pl.name)); }
+                return { ...ls, ...updated };
+              }));
+            } else if (status === 'error') {
+              setLegStates(prev => prev.map((ls, j) => j !== legIndex ? ls : { ...ls, agentStatuses: { ...ls.agentStatuses, [agent]: 'error' } }));
+            }
+          } catch { /* skip */ }
+        }
+      }
+    } catch { addToast('Agent search failed', 'error'); }
+  }, [edited, editedLegs, emailText, addToast]);
 
   /* ---- All agents done check ---- */
   const allAgentsDone = legStates.length > 0 && legStates.every((leg, i) => {
@@ -442,28 +363,23 @@ export default function InboxPage() {
     setStep(4); setIsStreaming(true); setComposedEmail(''); setCopied(false); setIsEditing(false); setPreviewMode('editor');
     let text = '';
 
-    if (isMultiLeg) {
-      // Mock multi-leg compose — stream a pre-generated email
-      text = generateMultiLegEmail(analysis, legStates, editedLegs);
-      let accumulated = '';
-      const chunks = text.match(/.{1,8}/g) || [];
-      for (const chunk of chunks) {
-        accumulated += chunk;
-        setComposedEmail(accumulated);
-        await delay(15);
-      }
-      setComposedEmail(text);
-      addToast('Response composed — ready to review', 'success');
-      setIsStreaming(false);
-      const total = Math.round((Date.now() - startTimeRef.current) / 1000);
-      setTotalTime(total);
-      saveHistoryAndCustomer(text, total);
-      return;
-    }
-
-    // Single-dest: existing compose flow
     try {
       const leg0 = legStates[0] || createEmptyLegState();
+
+      // Build per-leg data for multi-leg compose
+      const perLegData = isMultiLeg ? legStates.map((leg, i) => {
+        const isReturn = i === legStates.length - 1;
+        return {
+          legName: isReturn ? 'Return Flight' : (editedLegs[i]?.destination || ''),
+          selectedFlight: leg.flights[leg.selectedFlightIdx] || null,
+          selectedHotel: !isReturn ? leg.hotels[leg.selectedHotelIdx] || null : null,
+          flights: leg.flights,
+          hotels: !isReturn ? leg.hotels : [],
+          topPlaces: !isReturn ? leg.places.filter(p => leg.includedPlaces.has(p.name)) : [],
+          itinerarySummary: !isReturn ? leg.research : '',
+        };
+      }) : undefined;
+
       const res = await fetch('/api/compose', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -472,6 +388,7 @@ export default function InboxPage() {
           selectedHotel: leg0.hotels[leg0.selectedHotelIdx] || null,
           flights: leg0.flights, hotels: leg0.hotels, research: leg0.research, places: leg0.places,
           includedPlaces: [...leg0.includedPlaces],
+          perLegData,
           settings: settings ? {
             responseLanguage: settings.responseLanguage, tone: settings.tone,
             emailSignature: settings.emailSignature, defaultGreeting: settings.defaultGreeting,
@@ -511,46 +428,6 @@ export default function InboxPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emailText, analysis, legStates, editedLegs, isMultiLeg, settings, knownCustomer, addToast]);
-
-  /* ---- Generate multi-leg composed email ---- */
-  function generateMultiLegEmail(a: EmailAnalysis | null, legs: LegState[], eLs: EditableLeg[]): string {
-    if (!a) return '';
-    let t = `Dear ${a.customerName || 'valued customer'},\n\nThank you for your inquiry about your ${a.dates.duration}-day trip to Greece! We are delighted to help you plan this exciting multi-destination journey.\n\nBelow you will find our carefully selected recommendations for each stop on your itinerary.\n\n`;
-    for (let i = 0; i < eLs.length; i++) {
-      const leg = eLs[i];
-      const state = legs[i];
-      if (!state) continue;
-      const flight = state.flights[state.selectedFlightIdx];
-      const hotel = state.hotels[state.selectedHotelIdx];
-      t += `--- ${leg.destination.toUpperCase()} (${leg.nights} nights) ---\n\n`;
-      if (flight) t += `Flight: ${flight.airline}, ${flight.origin} to ${flight.destination}, departing ${fmtClock(flight.departureTime)}, arriving ${fmtClock(flight.arrivalTime)} — ${flight.price} EUR per person\n`;
-      if (hotel) t += `Hotel: ${hotel.name} (${hotel.area}) — ${hotel.pricePerNight} EUR per night, rated ${hotel.rating}/10\n${hotel.highlights}\n`;
-      if (state.research) t += `\nSuggested itinerary:\n${state.research}\n`;
-      t += '\n';
-    }
-    const returnState = legs[eLs.length];
-    if (returnState) {
-      const rf = returnState.flights[returnState.selectedFlightIdx];
-      if (rf) t += `--- RETURN FLIGHT ---\n\n${rf.airline}, ${rf.origin} to ${rf.destination}, departing ${fmtClock(rf.departureTime)}, arriving ${fmtClock(rf.arrivalTime)} — ${rf.price} EUR per person\n\n`;
-    }
-    // Cost summary
-    let totalCost = 0;
-    for (let i = 0; i < eLs.length; i++) {
-      const state = legs[i];
-      if (!state) continue;
-      const f = state.flights[state.selectedFlightIdx];
-      const h = state.hotels[state.selectedHotelIdx];
-      if (f) totalCost += f.price * (a.travelers.adults + a.travelers.children);
-      if (h) totalCost += h.pricePerNight * eLs[i].nights;
-    }
-    if (returnState) {
-      const rf = returnState.flights[returnState.selectedFlightIdx];
-      if (rf) totalCost += rf.price * (a.travelers.adults + a.travelers.children);
-    }
-    t += `Estimated total: ${totalCost} EUR (flights + accommodation for ${a.travelers.adults} travelers)\n\n`;
-    t += `We look forward to helping you finalize your dream trip to Greece!\n\nWarm regards,\nAfea Travel\n\n© 2026 Revival SA — AI & Business Intelligence`;
-    return t;
-  }
 
   /* ---- Save history + customer ---- */
   function saveHistoryAndCustomer(text: string, total: number) {
@@ -866,7 +743,6 @@ export default function InboxPage() {
 
           {/* ---- LegResults for active tab ---- */}
           <LegResults
-            analysis={analysis}
             flights={currentLeg.flights}
             hotels={currentLeg.hotels}
             research={currentLeg.research}
@@ -884,6 +760,8 @@ export default function InboxPage() {
               if (j !== activeLegTab) return ls;
               const n = new Set(ls.includedPlaces); n.has(name) ? n.delete(name) : n.add(name); return { ...ls, includedPlaces: n };
             }))}
+            legNights={isMultiLeg ? (editedLegs[activeLegTab]?.nights || analysis?.dates.duration || 1) : (analysis?.dates.duration || 1)}
+            travelers={analysis?.travelers}
           />
 
           {/* Bottom actions */}
@@ -1015,12 +893,18 @@ export default function InboxPage() {
                           {!isReturn && editedLegs[i] && <span className="opacity-60"> · {editedLegs[i].nights}n</span>}
                         </h4>
                       )}
-                      {selectedFlight && (
-                        <div className="glass-card p-3 mb-2"><div className="flex items-center gap-2 text-xs mb-1" style={{ color: 'var(--color-primary)' }}><Plane size={12} /> Flight</div><p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{selectedFlight.airline}</p><p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{fmtClock(selectedFlight.departureTime)} → {fmtClock(selectedFlight.arrivalTime)} · {selectedFlight.price}€/person</p></div>
-                      )}
-                      {selectedHotel && (
-                        <div className="glass-card p-3 mb-2"><div className="flex items-center gap-2 text-xs mb-1" style={{ color: 'var(--color-amber)' }}><Building2 size={12} /> Hotel</div><p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{selectedHotel.name}</p><p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{selectedHotel.area} · {selectedHotel.pricePerNight}€/night · ★{selectedHotel.rating}</p></div>
-                      )}
+                      {selectedFlight && (() => {
+                        const pax = analysis!.travelers.adults + analysis!.travelers.children;
+                        return (
+                          <div className="glass-card p-3 mb-2"><div className="flex items-center gap-2 text-xs mb-1" style={{ color: 'var(--color-primary)' }}><Plane size={12} /> Flight</div><p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{selectedFlight.airline}</p><p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{fmtClock(selectedFlight.departureTime)} → {fmtClock(selectedFlight.arrivalTime)}</p><p className="text-xs font-medium mt-0.5" style={{ color: 'var(--color-primary)' }}>{selectedFlight.price}€/person × {pax} = {selectedFlight.price * pax}€</p></div>
+                        );
+                      })()}
+                      {selectedHotel && (() => {
+                        const legNights = !isReturn ? (editedLegs[i]?.nights || analysis!.dates.duration) : 0;
+                        return (
+                          <div className="glass-card p-3 mb-2"><div className="flex items-center gap-2 text-xs mb-1" style={{ color: 'var(--color-amber)' }}><Building2 size={12} /> Hotel</div><p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{selectedHotel.name}</p><p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{selectedHotel.area} · ★{selectedHotel.rating}</p><p className="text-xs font-medium mt-0.5" style={{ color: 'var(--color-amber)' }}>{selectedHotel.pricePerNight}€/night × {legNights} night{legNights !== 1 ? 's' : ''} = {selectedHotel.pricePerNight * legNights}€</p></div>
+                        );
+                      })()}
                     </div>
                   );
                 })}
