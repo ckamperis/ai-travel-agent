@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useEffect, useRef } from 'react';
+import { useMemo, useEffect, useRef, useCallback } from 'react';
 import { APIProvider, Map, useMap } from '@vis.gl/react-google-maps';
 
 interface Location {
@@ -13,50 +13,106 @@ interface Location {
 interface MapViewProps {
   locations: Location[];
   selectedIndex?: number;
+  highlightedIndex?: number;
+  visibleIndices?: number[];
   onSelect?: (index: number) => void;
   height?: number;
 }
 
-function MapMarkers({ locations, selectedIndex, onSelect }: {
+function MapMarkers({ locations, selectedIndex, highlightedIndex, visibleIndices, onSelect }: {
   locations: Location[];
   selectedIndex?: number;
+  highlightedIndex?: number;
+  visibleIndices?: number[];
   onSelect?: (index: number) => void;
 }) {
   const map = useMap();
   const markersRef = useRef<google.maps.Marker[]>([]);
+  const bounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevSelectedRef = useRef<number | undefined>(undefined);
 
+  const getIcon = useCallback((index: number) => {
+    if (index === selectedIndex) {
+      // Selected: red default (larger)
+      return {
+        url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+        scaledSize: { width: 40, height: 40, equals: () => false },
+        anchor: { x: 20, y: 40, equals: () => false },
+      };
+    }
+    if (index === highlightedIndex) {
+      // Hovered: yellow marker
+      return {
+        url: 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png',
+        scaledSize: { width: 36, height: 36, equals: () => false },
+        anchor: { x: 18, y: 36, equals: () => false },
+      };
+    }
+    // Normal: blue marker
+    return {
+      url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+    };
+  }, [selectedIndex, highlightedIndex]);
+
+  // Pan to selected marker
+  useEffect(() => {
+    if (!map || selectedIndex == null || selectedIndex < 0) return;
+    if (selectedIndex === prevSelectedRef.current) return;
+    prevSelectedRef.current = selectedIndex;
+
+    const loc = locations[selectedIndex];
+    if (!loc) return;
+    map.panTo({ lat: loc.lat, lng: loc.lng });
+    map.setZoom(15);
+  }, [map, selectedIndex, locations]);
+
+  // Create/update markers
   useEffect(() => {
     if (!map) return;
 
     // Clear old markers
     markersRef.current.forEach(m => m.setMap(null));
+    if (bounceTimerRef.current) clearTimeout(bounceTimerRef.current);
 
-    // Create new markers
-    const newMarkers = locations.map((loc, i) => {
+    const indicesToShow = visibleIndices ?? locations.map((_, i) => i);
+
+    const newMarkers = indicesToShow.map(i => {
+      const loc = locations[i];
+      if (!loc) return null;
+
       const isSelected = i === selectedIndex;
       const marker = new google.maps.Marker({
         position: { lat: loc.lat, lng: loc.lng },
         map,
         title: loc.label,
-        icon: isSelected ? undefined : {
-          url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png'
-        }
+        icon: getIcon(i) as google.maps.Icon,
+        animation: isSelected ? google.maps.Animation.BOUNCE : undefined,
+        zIndex: isSelected ? 1000 : i === highlightedIndex ? 500 : 1,
       });
+
+      // Stop bounce after ~700ms (1 bounce cycle)
+      if (isSelected) {
+        bounceTimerRef.current = setTimeout(() => {
+          marker.setAnimation(null);
+        }, 700);
+      }
+
       marker.addListener('click', () => onSelect?.(i));
       return marker;
-    });
+    }).filter((m): m is google.maps.Marker => m !== null);
 
     markersRef.current = newMarkers;
 
     return () => {
       newMarkers.forEach(m => m.setMap(null));
+      if (bounceTimerRef.current) clearTimeout(bounceTimerRef.current);
     };
-  }, [map, locations, selectedIndex, onSelect]);
+  }, [map, locations, selectedIndex, highlightedIndex, visibleIndices, onSelect, getIcon]);
 
   return null;
 }
 
-export default function MapView({ locations, selectedIndex, onSelect, height = 300 }: MapViewProps) {
+export default function MapView({ locations, selectedIndex, highlightedIndex, visibleIndices, onSelect, height = 300 }: MapViewProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || '';
 
   const center = useMemo(() => {
@@ -89,6 +145,8 @@ export default function MapView({ locations, selectedIndex, onSelect, height = 3
           <MapMarkers
             locations={locations}
             selectedIndex={selectedIndex}
+            highlightedIndex={highlightedIndex}
+            visibleIndices={visibleIndices}
             onSelect={onSelect}
           />
         </Map>

@@ -137,6 +137,9 @@ export default function InboxPage() {
   const [expandedDays, setExpandedDays] = useState<Set<number>>(new Set());
   const [flightSort, setFlightSort] = useState<'price' | 'duration' | 'stops'>('price');
   const [weather, setWeather] = useState<WeatherDay[]>([]);
+  const [hoveredHotelIdx, setHoveredHotelIdx] = useState(-1);
+  const [focusedPlaceIdx, setFocusedPlaceIdx] = useState(-1);
+  const placeRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // Step 4
   const [composedEmail, setComposedEmail] = useState('');
@@ -602,22 +605,23 @@ export default function InboxPage() {
           {/* HOTELS */}
           {activeTab === 'hotels' && (<div>
             {agentStatuses.hotel === 'active' && <div className="flex items-center gap-3 py-12 justify-center" style={{ color: 'var(--color-text-muted)' }}><Loader2 size={20} className="animate-spin" style={{ color: 'var(--color-amber)' }} /> Searching hotels...</div>}
-            {hotels.length > 0 && (<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{hotels.map((h, i) => (
-              <div key={i} onClick={() => setSelectedHotelIdx(i)} className="glass-card p-4 cursor-pointer transition-all" style={{ borderColor: i === selectedHotelIdx ? 'var(--color-amber)' : 'var(--color-border)', background: i === selectedHotelIdx ? 'var(--color-amber-light)' : undefined }}>
-                <div className="flex items-start justify-between"><div><div className="flex items-center gap-2">{i === selectedHotelIdx && <CheckCircle size={14} style={{ color: 'var(--color-amber)' }} />}<h4 className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{h.name}</h4></div><p className="mt-0.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>{h.area}</p></div><div className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-semibold" style={{ background: 'var(--color-amber-light)', color: 'var(--color-amber)' }}><Star size={10} style={{ fill: 'var(--color-amber)' }} />{h.rating}</div></div>
-                <div className="mt-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>{h.amenities?.join(' · ')}</div>
-                <div className="mt-3 flex items-center justify-between border-t pt-3" style={{ borderColor: 'var(--color-border)' }}><div className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--color-text-secondary)' }}><TrainFront size={11} />{h.metroStation} ({h.metroDistance})</div><div className="text-sm font-semibold" style={{ color: 'var(--color-amber)' }}>{h.pricePerNight}€<span className="ml-0.5 text-[10px] font-normal" style={{ color: 'var(--color-text-muted)' }}>/night</span></div></div>
-              </div>))}</div>)}
             {hotels.length > 0 && hotelLocs.length > 0 && (
-              <div className="mt-4">
+              <div className="mb-4">
                 <MapView
                   locations={hotelLocs.map(h => ({ lat: h!.lat, lng: h!.lng, label: h!.label }))}
                   selectedIndex={hotelLocs.findIndex(h => h!.idx === selectedHotelIdx)}
+                  highlightedIndex={hoveredHotelIdx >= 0 ? hotelLocs.findIndex(h => h!.idx === hoveredHotelIdx) : undefined}
                   onSelect={(i) => { const loc = hotelLocs[i]; if (loc) setSelectedHotelIdx(loc.idx); }}
                   height={280}
                 />
               </div>
             )}
+            {hotels.length > 0 && (<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{hotels.map((h, i) => (
+              <div key={i} onClick={() => setSelectedHotelIdx(i)} onMouseEnter={() => setHoveredHotelIdx(i)} onMouseLeave={() => setHoveredHotelIdx(-1)} className="glass-card p-4 cursor-pointer transition-all" style={{ borderColor: i === selectedHotelIdx ? 'var(--color-amber)' : i === hoveredHotelIdx ? 'var(--color-primary)' : 'var(--color-border)', background: i === selectedHotelIdx ? 'var(--color-amber-light)' : undefined }}>
+                <div className="flex items-start justify-between"><div><div className="flex items-center gap-2">{i === selectedHotelIdx && <CheckCircle size={14} style={{ color: 'var(--color-amber)' }} />}<h4 className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{h.name}</h4></div><p className="mt-0.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>{h.area}</p></div><div className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-semibold" style={{ background: 'var(--color-amber-light)', color: 'var(--color-amber)' }}><Star size={10} style={{ fill: 'var(--color-amber)' }} />{h.rating}</div></div>
+                <div className="mt-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>{h.amenities?.join(' · ')}</div>
+                <div className="mt-3 flex items-center justify-between border-t pt-3" style={{ borderColor: 'var(--color-border)' }}><div className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--color-text-secondary)' }}><TrainFront size={11} />{h.metroStation} ({h.metroDistance})</div><div className="text-sm font-semibold" style={{ color: 'var(--color-amber)' }}>{h.pricePerNight}€<span className="ml-0.5 text-[10px] font-normal" style={{ color: 'var(--color-text-muted)' }}>/night</span></div></div>
+              </div>))}</div>)}
           </div>)}
 
           {/* ITINERARY */}
@@ -640,22 +644,41 @@ export default function InboxPage() {
           {/* PLACES */}
           {activeTab === 'places' && (<div>
             {agentStatuses.places === 'active' && <div className="flex items-center gap-3 py-12 justify-center" style={{ color: 'var(--color-text-muted)' }}><Loader2 size={20} className="animate-spin" style={{ color: 'var(--color-purple)' }} /> Searching places...</div>}
+            {places.length > 0 && (() => {
+              const placesWithCoords = places.map((p, i) => ({ ...p, origIdx: i })).filter(p => p.lat != null && p.lng != null);
+              const visiblePlaceIndices = placesWithCoords
+                .filter(p => includedPlaces.has(p.name))
+                .map(p => placesWithCoords.indexOf(p));
+              const focusedMapIdx = focusedPlaceIdx >= 0 ? placesWithCoords.findIndex(p => p.origIdx === focusedPlaceIdx) : -1;
+              return (
+                <div className="mb-4">
+                  <MapView
+                    locations={placesWithCoords.map(p => ({
+                      lat: p.lat!, lng: p.lng!, label: p.name, color: '#A78BFA',
+                    }))}
+                    selectedIndex={focusedMapIdx >= 0 ? focusedMapIdx : undefined}
+                    visibleIndices={visiblePlaceIndices}
+                    onSelect={(mapIdx) => {
+                      const place = placesWithCoords[mapIdx];
+                      if (place) {
+                        setFocusedPlaceIdx(place.origIdx);
+                        placeRefs.current[place.origIdx]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                      }
+                    }}
+                    height={280}
+                  />
+                </div>
+              );
+            })()}
             {places.length > 0 && (<div className="glass-card divide-y" style={{ borderColor: 'var(--color-border)' }}>{places.map((p, i) => (
-              <div key={i} className="flex items-center gap-4 px-5 py-3" style={{ borderColor: 'var(--color-border)' }}>
-                <input type="checkbox" checked={includedPlaces.has(p.name)} onChange={() => setIncludedPlaces(prev => { const n = new Set(prev); n.has(p.name) ? n.delete(p.name) : n.add(p.name); return n; })} className="h-4 w-4 rounded cursor-pointer" style={{ accentColor: 'var(--color-primary)', borderColor: 'var(--color-border)', background: 'var(--color-bg-secondary)' }} />
-                <div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{p.name}</span>{p.rating != null && <span className="flex items-center gap-0.5 text-xs" style={{ color: 'var(--color-purple)' }}><Star size={10} className="fill-current" />{p.rating}</span>}</div><p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>{p.address}</p>{p.summary && <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--color-text-secondary)' }}>{p.summary}</p>}</div>
-                {p.mapsUrl && <a href={p.mapsUrl} target="_blank" rel="noopener noreferrer" className="transition-colors" style={{ color: 'var(--color-text-muted)' }}><ExternalLink size={14} /></a>}
+              <div key={i} ref={el => { placeRefs.current[i] = el; }} className="flex items-center gap-4 px-5 py-3 transition-all" style={{ borderColor: 'var(--color-border)', background: i === focusedPlaceIdx ? 'var(--color-primary-light)' : undefined }} onClick={() => setFocusedPlaceIdx(i === focusedPlaceIdx ? -1 : i)}>
+                <input type="checkbox" checked={includedPlaces.has(p.name)} onChange={(e) => { e.stopPropagation(); setIncludedPlaces(prev => { const n = new Set(prev); n.has(p.name) ? n.delete(p.name) : n.add(p.name); return n; }); }} className="h-4 w-4 rounded cursor-pointer" style={{ accentColor: 'var(--color-primary)', borderColor: 'var(--color-border)', background: 'var(--color-bg-secondary)' }} />
+                <div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span className="text-sm font-medium cursor-pointer" style={{ color: 'var(--color-text)' }}>{p.name}</span>{p.rating != null && <span className="flex items-center gap-0.5 text-xs" style={{ color: 'var(--color-purple)' }}><Star size={10} className="fill-current" />{p.rating}</span>}</div><p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>{p.address}</p>{p.summary && <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--color-text-secondary)' }}>{p.summary}</p>}</div>
+                <div className="flex items-center gap-2">
+                  {p.lat != null && p.lng != null && <button onClick={(e) => { e.stopPropagation(); setFocusedPlaceIdx(i); }} className="p-1 rounded transition-colors cursor-pointer" style={{ color: i === focusedPlaceIdx ? 'var(--color-primary)' : 'var(--color-text-muted)' }} title="View on map"><MapPin size={14} /></button>}
+                  {p.mapsUrl && <a href={p.mapsUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="transition-colors" style={{ color: 'var(--color-text-muted)' }}><ExternalLink size={14} /></a>}
+                </div>
               </div>))}</div>)}
-            {places.length > 0 && (
-              <div className="mt-4">
-                <MapView
-                  locations={places.filter(p => p.lat != null && p.lng != null).map(p => ({
-                    lat: p.lat!, lng: p.lng!, label: p.name, color: '#A78BFA',
-                  }))}
-                  height={280}
-                />
-              </div>
-            )}
           </div>)}
 
           {/* COMPARE */}
