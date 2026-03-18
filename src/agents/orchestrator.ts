@@ -1,7 +1,7 @@
 import { AgentEvent, AgentName, AgentStatus, EmailAnalysis, TripLeg } from "./types";
 import { analyzeEmail } from "./email-analyzer";
 import { searchFlights } from "./flight-agent";
-import { searchHotels } from "./hotel-agent";
+import { searchHotels, type HotelSearchResult } from "./hotel-agent";
 import { researchDestination } from "./research-agent";
 import { searchPlaces } from "./places-agent";
 
@@ -10,7 +10,7 @@ function makeEvent(
   status: AgentStatus,
   message: string,
   data?: unknown,
-  source?: 'live' | 'mock',
+  source?: 'live' | 'ai' | 'mock',
   legIndex?: number
 ): AgentEvent {
   const event: AgentEvent = { agent, status, message, data, source, timestamp: Date.now() };
@@ -18,11 +18,11 @@ function makeEvent(
   return event;
 }
 
-function getAgentSource(agent: AgentName): 'live' | 'mock' {
+function getAgentSource(agent: AgentName): 'live' | 'ai' | 'mock' {
   switch (agent) {
     case 'email': return process.env.OPENAI_API_KEY ? 'live' : 'mock';
     case 'flight': return process.env.DUFFEL_API_KEY ? 'live' : 'mock';
-    case 'hotel': return process.env.OPENAI_API_KEY ? 'live' : 'mock';
+    case 'hotel': return process.env.RAPIDAPI_KEY ? 'live' : process.env.OPENAI_API_KEY ? 'ai' : 'mock';
     case 'research': return process.env.OPENAI_API_KEY ? 'live' : 'mock';
     case 'places': return process.env.GOOGLE_PLACES_API_KEY ? 'live' : 'mock';
     default: return 'mock';
@@ -100,7 +100,16 @@ export async function* orchestrate(
   };
 
   runAgent("flight", () => searchFlights(analysis), "Flights found", "flights");
-  runAgent("hotel", () => searchHotels(analysis), "Hotels found", "hotels");
+  // Hotel agent returns { hotels, source } — unwrap and use actual source
+  (async () => {
+    try {
+      const result: HotelSearchResult = await searchHotels(analysis);
+      arrivals.push(makeEvent("hotel", "done", "Hotels found", result.hotels, result.source));
+    } catch {
+      arrivals.push(makeEvent("hotel", "error", "Agent failed: hotel"));
+    }
+    notify();
+  })();
   runAgent("research", () => researchDestination(analysis), "Research complete", "research");
   runAgent("places", () => searchPlaces(analysis), "Places found", "places");
 
@@ -241,11 +250,11 @@ export async function* orchestrateMultiLeg(
       }
     })();
 
-    // Hotel
+    // Hotel — returns { hotels, source }
     (async () => {
       try {
-        const data = await searchHotels(legAnalysis);
-        pushEvent(makeEvent("hotel", "done", `Leg ${i + 1}: Hotels found`, data, getAgentSource("hotel"), i));
+        const result: HotelSearchResult = await searchHotels(legAnalysis);
+        pushEvent(makeEvent("hotel", "done", `Leg ${i + 1}: Hotels found`, result.hotels, result.source, i));
       } catch {
         pushEvent(makeEvent("hotel", "error", `Leg ${i + 1}: Hotel search failed`, undefined, undefined, i));
       }
@@ -336,7 +345,16 @@ async function* orchestrateSingleLegAgents(analysis: EmailAnalysis): AsyncGenera
   };
 
   runAgent("flight", () => searchFlights(analysis), "Flights found");
-  runAgent("hotel", () => searchHotels(analysis), "Hotels found");
+  // Hotel agent returns { hotels, source } — unwrap and use actual source
+  (async () => {
+    try {
+      const result: HotelSearchResult = await searchHotels(analysis);
+      arrivals.push(makeEvent("hotel", "done", "Hotels found", result.hotels, result.source));
+    } catch {
+      arrivals.push(makeEvent("hotel", "error", "Agent failed: hotel"));
+    }
+    notify();
+  })();
   runAgent("research", () => researchDestination(analysis), "Research complete");
   runAgent("places", () => searchPlaces(analysis), "Places found");
 

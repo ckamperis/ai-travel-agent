@@ -6,7 +6,7 @@ export interface AgentEvent {
   status: AgentStatus;
   message: string;
   data?: unknown;
-  source?: 'live' | 'mock';
+  source?: 'live' | 'ai' | 'mock';
   timestamp: number;
   legIndex?: number;
 }

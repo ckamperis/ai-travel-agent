@@ -33,9 +33,10 @@ function parseResearchDays(text: string) {
 
 const WEATHER_ICONS: Record<string, string> = { 'sunny': '☀️', 'partly-cloudy': '⛅', 'cloudy': '☁️', 'rainy': '🌧️', 'stormy': '⛈️' };
 
-function LiveBadge({ source }: { source?: 'live' | 'mock' }) {
-  if (source !== 'live') return null;
-  return <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider" style={{ background: 'var(--color-green-light)', color: 'var(--color-green)' }}><Radio size={8} className="animate-pulse" />Live</span>;
+function LiveBadge({ source }: { source?: 'live' | 'ai' | 'mock' }) {
+  if (source === 'live') return <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider" style={{ background: 'var(--color-green-light)', color: 'var(--color-green)' }}><Radio size={8} className="animate-pulse" />Live</span>;
+  if (source === 'ai') return <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider" style={{ background: 'var(--color-purple)' + '20', color: 'var(--color-purple)' }}>AI</span>;
+  return null;
 }
 
 /* ---------------------------------------------------------------- */
@@ -48,7 +49,7 @@ interface LegResultsProps {
   weather: WeatherDay[];
   agentStatuses: Record<string, AgentStatus>;
   agentTimes: Record<string, number>;
-  agentSources: Record<string, 'live' | 'mock'>;
+  agentSources: Record<string, 'live' | 'ai' | 'mock'>;
   selectedFlightIdx: number;
   selectedHotelIdx: number;
   includedPlaces: Set<string>;

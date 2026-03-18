@@ -21,9 +21,9 @@ A product-ready AI-powered email assistant that handles travel inquiries. Multip
 │Flight│Hotel │Research│Places│  Composer      │
 │Agent │Agent │Agent  │Agent │  Agent         │
 │      │      │       │      │               │
-│Duffel│Mock  │GPT-4o │Google│  GPT-4o       │
-│API   │Data  │       │Places│  (synthesis)  │
-│(test)│+AI   │       │API   │               │
+│Duffel│Booking│GPT-4o │Google│  GPT-4o       │
+│API   │COM API│       │Places│  (synthesis)  │
+│(test)│+GPT4o│       │API   │               │
 └──────┴──────┴──────┴──────┴────────────────┘
 ```
 
@@ -33,7 +33,7 @@ A product-ready AI-powered email assistant that handles travel inquiries. Multip
 - **Streaming:** Server-Sent Events (SSE) for real-time agent updates
 - **AI:** OpenAI API (gpt-4o)
 - **Flight Data:** Duffel API (test mode — no signup needed)
-- **Hotel Data:** Curated mock data (guaranteed reliability)
+- **Hotel Data:** Booking.com API via RapidAPI (real data) → GPT-4o fallback → generic fallback
 - **Places/POI:** Google Places API (New, v1)
 - **Language:** TypeScript throughout
 
@@ -42,6 +42,7 @@ A product-ready AI-powered email assistant that handles travel inquiries. Multip
 OPENAI_API_KEY=sk-...                 # OpenAI API — from platform.openai.com
 GOOGLE_PLACES_API_KEY=AIza...         # Google Cloud Console → Places API (New)
 DUFFEL_API_KEY=duffel_test            # Test mode — works immediately, no signup
+RAPIDAPI_KEY=...                      # RapidAPI — for Booking.com hotel data
 ```
 
 Note: Duffel test key `duffel_test` returns simulated but realistic flight data.
@@ -89,8 +90,9 @@ ai-travel-agent/
 │   │   ├── email-to-html.ts          # Convert plain text to styled HTML preview
 │   │   ├── weather.ts                # Weather forecasts (Open-Meteo + fallback)
 │   │   ├── duffel.ts                 # Duffel API client
-│   │   ├── google-places.ts          # Google Places API client
-│   │   └── mock-hotels.ts            # Curated Athens hotel data
+│   │   ├── google-places.ts          # Google Places API client (GPT-4o fallback)
+│   │   ├── booking-api.ts            # Booking.com API client via RapidAPI
+│   │   └── hotel-fallback.ts         # Generic fallback hotel generator
 ```
 
 ## Agent Definitions
@@ -114,11 +116,15 @@ ai-travel-agent/
 
 ### 3. Hotel Agent
 - **Input:** City, check-in/out dates, guests, budget range
-- **Process:** Return curated mock data for Athens hotels
-- **Output:** Top 3-5 hotels with name, location, price, rating, metro proximity
-- **API:** None (mock data)
-- **Why mock:** Guaranteed to work in live demo. Hotel APIs require paid accounts.
-  The data is realistic and based on real Athens hotels.
+- **Process:** 3-tier fallback: Booking.com API → GPT-4o → generic fallback
+- **Output:** Top 5 hotels with name, location, price, rating, coordinates, amenities
+- **API:** Booking.com via RapidAPI (real data), OpenAI GPT-4o (AI suggestions)
+- **Booking.com flow:**
+  1. GET /api/v1/hotels/searchDestination — resolve city to dest_id
+  2. GET /api/v1/hotels/searchHotels — search with dates, guests, currency
+  3. Map response to HotelResult (name, price/night, rating, lat/lng, etc.)
+- **Source badge:** "Live" = Booking.com API, "AI" = GPT-4o, no badge = fallback
+- **Fallback:** GPT-4o suggests real hotel names; last resort = generic "[City] Hotel"
 
 ### 4. Research Agent
 - **Input:** Destination, interests, duration
@@ -255,78 +261,32 @@ Body:
 }
 ```
 
-## Mock Hotel Data Structure
-```typescript
-// src/lib/mock-hotels.ts
-// Based on real Athens hotels — realistic data for demo
-const ATHENS_HOTELS = [
-  {
-    name: "Hermes Hotel",
-    area: "Σύνταγμα",
-    address: "Apollonos 19, Athens 105 57",
-    pricePerNight: 142,
-    currency: "EUR",
-    rating: 8.9,
-    stars: 3,
-    metroStation: "Σύνταγμα",
-    metroDistance: "3 λεπτά",
-    amenities: ["WiFi", "Breakfast", "Air conditioning", "Rooftop bar"],
-    highlights: "Θέα στην Ακρόπολη από το rooftop, δίπλα στην Πλάκα"
-  },
-  {
-    name: "Hotel Plaka",
-    area: "Πλάκα",
-    address: "Kapnikareas 7, Athens 105 56",
-    pricePerNight: 135,
-    currency: "EUR",
-    rating: 8.7,
-    stars: 3,
-    metroStation: "Μοναστηράκι",
-    metroDistance: "2 λεπτά",
-    amenities: ["WiFi", "Breakfast", "Rooftop terrace"],
-    highlights: "Στην καρδιά της Πλάκας, rooftop με θέα Ακρόπολη"
-  },
-  {
-    name: "Athens Center Square",
-    area: "Μοναστηράκι",
-    address: "Aristogeitonos 15, Athens 105 52",
-    pricePerNight: 125,
-    currency: "EUR",
-    rating: 8.4,
-    stars: 3,
-    metroStation: "Μοναστηράκι",
-    metroDistance: "1 λεπτό",
-    amenities: ["WiFi", "Breakfast", "Restaurant"],
-    highlights: "Πάνω στο Μοναστηράκι, ιδανικό για εξερεύνηση"
-  },
-  {
-    name: "Electra Palace Athens",
-    area: "Πλάκα",
-    address: "Navarchou Nikodimou 18-20, Athens 105 57",
-    pricePerNight: 195,
-    currency: "EUR",
-    rating: 9.1,
-    stars: 5,
-    metroStation: "Σύνταγμα",
-    metroDistance: "4 λεπτά",
-    amenities: ["Pool", "Spa", "Rooftop restaurant", "WiFi", "Breakfast"],
-    highlights: "Luxury option, πισίνα στο rooftop με θέα Ακρόπολη"
-  },
-  {
-    name: "Fresh Hotel",
-    area: "Ομόνοια",
-    address: "Sofokleous 26, Athens 105 52",
-    pricePerNight: 105,
-    currency: "EUR",
-    rating: 8.2,
-    stars: 4,
-    metroStation: "Ομόνοια",
-    metroDistance: "2 λεπτά",
-    amenities: ["Pool", "WiFi", "Restaurant", "Rooftop bar"],
-    highlights: "Modern design hotel, rooftop pool, budget-friendly"
-  }
-];
+## Booking.com API Reference (via RapidAPI)
+- **Base URL:** https://booking-com15.p.rapidapi.com
+- **Auth:** X-RapidAPI-Key + X-RapidAPI-Host headers
+
+### Search Destination
 ```
+GET /api/v1/hotels/searchDestination?query=Athens
+→ [{ dest_id, search_type, label }]
+```
+
+### Search Hotels
+```
+GET /api/v1/hotels/searchHotels?dest_id={id}&search_type=city&arrival_date=2026-04-01&departure_date=2026-04-04&adults=2&room_qty=1&currency_code=EUR
+→ { data: { hotels: [{ property: { name, latitude, longitude, reviewScore, priceBreakdown, ... } }] } }
+```
+
+### Location to Lat/Long
+```
+GET /api/v1/meta/locationToLatLong?query=Istanbul
+→ { data: { latitude, longitude } }
+```
+
+### Hotel Agent Fallback Chain
+1. **Booking.com API** (RAPIDAPI_KEY) → real hotel data with prices, coordinates, ratings
+2. **GPT-4o** (OPENAI_API_KEY) → AI suggests real hotel names with approximate data
+3. **Generic fallback** → "[City] Central Hotel", "[City] Boutique Inn", etc.
 
 ## Demo Email (pre-filled, editable)
 The text area is pre-filled with a German couple's Greece trip request, but the user

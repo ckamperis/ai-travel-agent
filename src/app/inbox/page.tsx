@@ -90,7 +90,7 @@ interface LegState {
   includedPlaces: Set<string>;
   agentStatuses: Record<string, AgentStatus>;
   agentTimes: Record<string, number>;
-  agentSources: Record<string, 'live' | 'mock'>;
+  agentSources: Record<string, 'live' | 'ai' | 'mock'>;
   agentMessages: Record<string, string>;
 }
 
@@ -135,9 +135,10 @@ function extractEmail(text: string): string {
 const INPUT_CLS = 'w-full rounded-lg border px-4 py-2.5 text-sm outline-none transition-colors';
 const INPUT_STYLE: React.CSSProperties = { background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
 
-function LiveBadge({ source }: { source?: 'live' | 'mock' }) {
-  if (source !== 'live') return null;
-  return <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider" style={{ background: 'var(--color-green-light)', color: 'var(--color-green)' }}><Radio size={8} className="animate-pulse" />Live</span>;
+function LiveBadge({ source }: { source?: 'live' | 'ai' | 'mock' }) {
+  if (source === 'live') return <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider" style={{ background: 'var(--color-green-light)', color: 'var(--color-green)' }}><Radio size={8} className="animate-pulse" />Live</span>;
+  if (source === 'ai') return <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider" style={{ background: 'var(--color-purple)' + '20', color: 'var(--color-purple)' }}>AI</span>;
+  return null;
 }
 
 /* ================================================================ */
@@ -162,7 +163,7 @@ export default function InboxPage() {
   const [editedLegs, setEditedLegs] = useState<EditableLeg[]>([]);
   const [analysisLegTab, setAnalysisLegTab] = useState(0); // 0 = overview
   const [analysisLoading, setAnalysisLoading] = useState(false);
-  const [analysisSource, setAnalysisSource] = useState<'live' | 'mock'>('mock');
+  const [analysisSource, setAnalysisSource] = useState<'live' | 'ai' | 'mock'>('mock');
   const [analysisTime, setAnalysisTime] = useState(0);
   const [knownCustomer, setKnownCustomer] = useState<KnownCustomer | null>(null);
   const [newInterest, setNewInterest] = useState('');
@@ -569,7 +570,7 @@ export default function InboxPage() {
         <div className="animate-fade-in">
           <h1 className="text-2xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>Email Analysis</h1>
           <p className="text-sm mb-6" style={{ color: 'var(--color-text-secondary)' }}>Review and edit the extracted information before searching
-            {analysisSource === 'live' && <> <LiveBadge source="live" /></>}
+            {analysisSource !== 'mock' && <> <LiveBadge source={analysisSource} /></>}
             {analysisTime > 0 && <span className="ml-2" style={{ color: 'var(--color-text-muted)' }}><Clock size={11} className="inline" /> {fmtTime(analysisTime)}</span>}
             {hasLegs && <span className="ml-2 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider" style={{ background: 'var(--color-purple)' + '20', color: 'var(--color-purple)' }}>{editedLegs.length} legs</span>}
           </p>
