@@ -104,6 +104,16 @@ export async function researchDestination(
   return response.choices[0]?.message?.content || "";
 }
 
+export interface PerLegSelection {
+  legName: string;
+  selectedFlight?: unknown;
+  selectedHotel?: unknown;
+  flights?: unknown[];
+  hotels?: unknown[];
+  topPlaces?: unknown[];
+  itinerarySummary?: string;
+}
+
 export async function* composeEmail(
   allResults: {
     emailAnalysis: EmailAnalysis;
@@ -115,21 +125,10 @@ export async function* composeEmail(
     places: unknown[];
   },
   originalEmail: string,
-  settings?: ComposeSettings
+  settings?: ComposeSettings,
+  perLegData?: PerLegSelection[]
 ): AsyncGenerator<string> {
   const client = getClient();
-
-  const selectionInstructions: string[] = [];
-  if (allResults.selectedFlight) {
-    selectionInstructions.push(
-      `RECOMMENDED FLIGHT (present this as your primary recommendation):\n${JSON.stringify(allResults.selectedFlight, null, 2)}`
-    );
-  }
-  if (allResults.selectedHotel) {
-    selectionInstructions.push(
-      `RECOMMENDED HOTEL (present this as your primary recommendation):\n${JSON.stringify(allResults.selectedHotel, null, 2)}`
-    );
-  }
 
   // Build language instruction
   let languageInstruction: string;
@@ -196,29 +195,64 @@ export async function* composeEmail(
     );
   }
 
-  const stream = await client.chat.completions.create({
-    model: MODEL,
-    max_tokens: 3000,
-    stream: true,
-    messages: [
-      {
-        role: "system",
-        content: `CRITICAL: Do NOT use markdown formatting. No **, ##, *, bullet lists with -, or numbered lists with 1. 2. 3. Write in clean, natural paragraphs with proper sentence structure. This is a professional email, not a markdown document. Write as a human travel consultant would — warm, clear, with paragraph breaks for structure.
+  // Build user content based on single-leg vs multi-leg
+  let userContent: string;
 
-You are a professional travel agent at Afea Travel composing a response email.
-Write a warm, detailed, and well-organized response that:
-- Addresses the customer by name
-- ${allResults.selectedFlight ? 'Presents the RECOMMENDED flight prominently, then briefly mentions 1-2 alternatives' : 'Presents flight options in a clear format'}
-- ${allResults.selectedHotel ? 'Presents the RECOMMENDED hotel prominently, then briefly mentions alternatives' : 'Recommends hotels with key details'}
-- Includes the travel itinerary highlights
-- Mentions recommended restaurants and places
-- Ends with a professional closing and next steps
-- ${languageInstruction}
-- Use clean formatting with sections and bullet points${settingsBlock}`,
-      },
-      {
-        role: "user",
-        content: `Original customer email:
+  if (perLegData && perLegData.length > 1) {
+    // Multi-leg compose
+    const legSections = perLegData.map((leg, i) => {
+      const parts: string[] = [`--- DESTINATION ${i + 1}: ${leg.legName} ---`];
+      if (leg.selectedFlight) {
+        parts.push(`Recommended flight:\n${JSON.stringify(leg.selectedFlight, null, 2)}`);
+      }
+      if (leg.flights && leg.flights.length > 0) {
+        parts.push(`All flight options:\n${JSON.stringify(leg.flights, null, 2)}`);
+      }
+      if (leg.selectedHotel) {
+        parts.push(`Recommended hotel:\n${JSON.stringify(leg.selectedHotel, null, 2)}`);
+      }
+      if (leg.hotels && leg.hotels.length > 0) {
+        parts.push(`All hotel options:\n${JSON.stringify(leg.hotels, null, 2)}`);
+      }
+      if (leg.itinerarySummary) {
+        parts.push(`Itinerary:\n${leg.itinerarySummary}`);
+      }
+      if (leg.topPlaces && leg.topPlaces.length > 0) {
+        parts.push(`Recommended places:\n${JSON.stringify(leg.topPlaces, null, 2)}`);
+      }
+      return parts.join('\n\n');
+    }).join('\n\n');
+
+    // Calculate total budget
+    const totalBudgetNote = `\nIMPORTANT: Include a TOTAL BUDGET BREAKDOWN at the end covering all destinations — flights + hotels + estimated daily expenses for each leg, then a grand total.`;
+
+    userContent = `Original customer email:
+${originalEmail}
+
+Email analysis:
+${JSON.stringify(allResults.emailAnalysis, null, 2)}
+
+This is a MULTI-DESTINATION trip with ${perLegData.length} stops. Structure the email with clear sections for each destination.
+
+${legSections}
+${totalBudgetNote}
+
+Compose a complete, professional response email from Afea Travel to the customer, with a clear section for each destination.`;
+  } else {
+    // Single-leg compose (original behavior)
+    const selectionInstructions: string[] = [];
+    if (allResults.selectedFlight) {
+      selectionInstructions.push(
+        `RECOMMENDED FLIGHT (present this as your primary recommendation):\n${JSON.stringify(allResults.selectedFlight, null, 2)}`
+      );
+    }
+    if (allResults.selectedHotel) {
+      selectionInstructions.push(
+        `RECOMMENDED HOTEL (present this as your primary recommendation):\n${JSON.stringify(allResults.selectedHotel, null, 2)}`
+      );
+    }
+
+    userContent = `Original customer email:
 ${originalEmail}
 
 Email analysis:
@@ -236,7 +270,39 @@ ${allResults.research}
 Recommended places:
 ${JSON.stringify(placesData, null, 2)}
 
-Compose a complete, professional response email from Afea Travel to the customer.`,
+Compose a complete, professional response email from Afea Travel to the customer.`;
+  }
+
+  const isMultiLeg = perLegData && perLegData.length > 1;
+
+  const stream = await client.chat.completions.create({
+    model: MODEL,
+    max_tokens: isMultiLeg ? 4000 : 3000,
+    stream: true,
+    messages: [
+      {
+        role: "system",
+        content: `CRITICAL: Do NOT use markdown formatting. No **, ##, *, bullet lists with -, or numbered lists with 1. 2. 3. Write in clean, natural paragraphs with proper sentence structure. This is a professional email, not a markdown document. Write as a human travel consultant would — warm, clear, with paragraph breaks for structure.
+
+You are a professional travel agent at Afea Travel composing a response email.
+Write a warm, detailed, and well-organized response that:
+- Addresses the customer by name
+${isMultiLeg
+  ? `- Organizes the email by destination, with a clear section for each stop
+- For each destination: presents the recommended flight and hotel, brief itinerary highlights, and top places
+- Includes inter-destination travel details (flights between cities)
+- Ends with a total budget breakdown across all destinations`
+  : `- ${allResults.selectedFlight ? 'Presents the RECOMMENDED flight prominently, then briefly mentions 1-2 alternatives' : 'Presents flight options in a clear format'}
+- ${allResults.selectedHotel ? 'Presents the RECOMMENDED hotel prominently, then briefly mentions alternatives' : 'Recommends hotels with key details'}
+- Includes the travel itinerary highlights
+- Mentions recommended restaurants and places`}
+- Ends with a professional closing and next steps
+- ${languageInstruction}
+- Use clean formatting with sections and bullet points${settingsBlock}`,
+      },
+      {
+        role: "user",
+        content: userContent,
       },
     ],
   });

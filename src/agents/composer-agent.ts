@@ -1,4 +1,4 @@
-import { composeEmail } from "@/lib/ai";
+import { composeEmail, PerLegSelection } from "@/lib/ai";
 import { AllAgentResults, FlightResult, HotelResult } from "./types";
 
 export interface ComposerSettings {
@@ -18,6 +18,7 @@ export async function* composeResponse(
   selectedFlight?: FlightResult,
   selectedHotel?: HotelResult,
   composerSettings?: ComposerSettings,
+  perLegData?: PerLegSelection[],
 ): AsyncGenerator<string> {
   try {
     const libAnalysis = {
@@ -36,7 +37,8 @@ export async function* composeResponse(
         places: results.places,
       },
       originalEmail,
-      composerSettings
+      composerSettings,
+      perLegData
     );
 
     for await (const chunk of stream) {

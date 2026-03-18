@@ -1,4 +1,4 @@
-import { orchestrate } from "@/agents/orchestrator";
+import { orchestrate, orchestrateMultiLeg } from "@/agents/orchestrator";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
@@ -13,12 +13,21 @@ export async function POST(request: Request) {
     );
   }
 
+  // For 'search' mode with pre-supplied analysis, check if multi-leg
+  // For 'full' mode, orchestrateMultiLeg handles detection internally (falls back to single-leg)
+  const isMultiLeg = mode === 'full'
+    || (analysis?.legs && analysis.legs.length > 1);
+
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        for await (const event of orchestrate(emailText, mode, analysis)) {
+        const generator = isMultiLeg
+          ? orchestrateMultiLeg(emailText, mode, analysis)
+          : orchestrate(emailText, mode, analysis);
+
+        for await (const event of generator) {
           const data = JSON.stringify(event);
           controller.enqueue(encoder.encode(`data: ${data}\n\n`));
         }

@@ -8,6 +8,15 @@ export interface AgentEvent {
   data?: unknown;
   source?: 'live' | 'mock';
   timestamp: number;
+  legIndex?: number;
+}
+
+export interface TripLeg {
+  destination: string;
+  destinationIATA: string;
+  nights: number;
+  budget: { min: number; max: number; currency: string };
+  interests: string[];
 }
 
 export interface EmailAnalysis {
@@ -22,6 +31,7 @@ export interface EmailAnalysis {
   language: string;
   specialRequests: string[];
   customerName?: string;
+  legs?: TripLeg[];
 }
 
 export interface FlightResult {
@@ -62,10 +72,20 @@ export interface PlaceResult {
   lng?: number;
 }
 
+export interface LegAgentResults {
+  legIndex: number;
+  legName: string;
+  flights: FlightResult[];
+  hotels: HotelResult[];
+  research: string;
+  places: PlaceResult[];
+}
+
 export interface AllAgentResults {
   emailAnalysis: EmailAnalysis;
   flights: FlightResult[];
   hotels: HotelResult[];
   research: string;
   places: PlaceResult[];
+  legs?: LegAgentResults[];
 }

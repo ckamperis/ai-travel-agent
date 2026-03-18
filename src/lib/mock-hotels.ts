@@ -63,6 +63,36 @@ function resolveDestination(destination: string): string {
   return '';
 }
 
+/**
+ * Generate plausible mock hotels for a city not in the database.
+ * Uses the city name to create realistic-sounding hotel names and landmarks.
+ */
+function generateMockHotels(cityName: string): Hotel[] {
+  const city = cityName.charAt(0).toUpperCase() + cityName.slice(1);
+  const areas = ['Old Town', 'City Center', 'Harbor District', 'Historic Quarter', 'Central Station'];
+  const templates = [
+    { suffix: 'Grand Hotel', stars: 4, price: 185, rating: 8.8, amenities: ['WiFi', 'Breakfast', 'Spa', 'Restaurant'] },
+    { suffix: 'Boutique Hotel', stars: 3, price: 135, rating: 8.5, amenities: ['WiFi', 'Breakfast', 'A/C', 'Bar'] },
+    { suffix: 'Palace', stars: 5, price: 260, rating: 9.2, amenities: ['Pool', 'Spa', 'WiFi', 'Breakfast', 'Concierge'] },
+    { suffix: 'City Inn', stars: 3, price: 95, rating: 8.0, amenities: ['WiFi', 'Breakfast', 'A/C'] },
+    { suffix: 'Central Hotel', stars: 4, price: 155, rating: 8.6, amenities: ['WiFi', 'Breakfast', 'Restaurant', 'Gym'] },
+  ];
+
+  return templates.map((t, i) => ({
+    name: `${city} ${t.suffix}`,
+    area: areas[i],
+    address: `${areas[i]}, ${city}`,
+    pricePerNight: t.price,
+    currency: 'EUR',
+    rating: t.rating,
+    stars: t.stars,
+    metroStation: `${city} ${areas[i]}`,
+    metroDistance: `${i + 1} min`,
+    amenities: t.amenities,
+    highlights: `${t.stars >= 4 ? 'Premium' : 'Comfortable'} stay in ${city}'s ${areas[i]}`,
+  }));
+}
+
 /* ── Public API ─────────────────────────────────────────────────── */
 
 export function getHotels(
@@ -70,7 +100,17 @@ export function getHotels(
   destination?: string
 ): Hotel[] {
   const key = destination ? resolveDestination(destination) : 'athens';
-  const hotels = HOTELS_DB[key] || HOTELS_DB.athens;
+  let hotels: Hotel[];
+
+  if (key && HOTELS_DB[key]) {
+    hotels = HOTELS_DB[key];
+  } else if (destination) {
+    // Unknown city — generate dynamic mock data instead of falling back to Athens
+    console.log(`[MockHotels] No data for "${destination}" — generating dynamic mocks`);
+    hotels = generateMockHotels(destination);
+  } else {
+    hotels = HOTELS_DB.athens;
+  }
 
   if (!budget || (budget.min === 0 && budget.max === 0)) return hotels;
 

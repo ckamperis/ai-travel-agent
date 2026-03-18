@@ -22,7 +22,7 @@ export async function analyzeEmail(emailText: string): Promise<EmailAnalysis> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     console.warn("OPENAI_API_KEY not set — returning mock analysis");
-    return MOCK_ANALYSIS;
+    return detectMultiLegMock(emailText);
   }
 
   try {
@@ -45,21 +45,36 @@ IMPORTANT RULES:
    - If origin city is not explicitly stated but the customer's country/city is clear from their name or email address (e.g., a German name from Hamburg → HAM, a French email → CDG), use the most likely airport.
    - NEVER return an empty string for originIATA or destinationIATA.
 3. Extract the customer's full name from the email signature or greeting.
+4. MULTI-DESTINATION TRIPS: If the email mentions multiple destinations (e.g., "3 days in Rome then 4 days in Santorini", "Rome and Athens", "island-hopping"), return a "legs" array. Each leg represents a distinct destination stop. If only a single destination, do NOT include the "legs" field at all.
+   - Each leg has: destination, destinationIATA, nights, budget (per night), interests for that leg.
+   - Split total trip duration across legs based on context. If not specified, distribute evenly.
+   - The top-level "destination" and "destinationIATA" should be the FIRST leg's destination.
+   - The top-level "dates.duration" should be the total trip duration across all legs.
 
 Respond ONLY with valid JSON matching this exact schema:
 {
   "origin": "city name",
   "originIATA": "3-letter IATA airport code (REQUIRED, never empty)",
-  "destination": "city name",
+  "destination": "first destination city name",
   "destinationIATA": "3-letter IATA airport code (REQUIRED, never empty)",
-  "dates": { "start": "YYYY-MM-DD", "end": "YYYY-MM-DD", "duration": number },
+  "dates": { "start": "YYYY-MM-DD", "end": "YYYY-MM-DD", "duration": total_number_of_days },
   "travelers": { "adults": number, "children": number, "names": ["full names from email"] },
   "budget": { "min": number (per night), "max": number (per night), "currency": "EUR" },
   "interests": ["string"],
   "language": "detected language code (e.g. en, de, fr)",
   "specialRequests": ["specific request strings"],
-  "customerName": "primary contact's full name (e.g. 'Klaus Mueller', 'Marie Dupont')"
-}`,
+  "customerName": "primary contact's full name (e.g. 'Klaus Mueller', 'Marie Dupont')",
+  "legs": [
+    {
+      "destination": "city name",
+      "destinationIATA": "3-letter IATA code",
+      "nights": number,
+      "budget": { "min": number, "max": number, "currency": "EUR" },
+      "interests": ["interests specific to this destination"]
+    }
+  ]
+}
+NOTE: Only include "legs" if the email mentions 2+ distinct destinations. Omit it entirely for single-destination trips.`,
         },
         { role: "user", content: emailText },
       ],
@@ -89,6 +104,70 @@ Respond ONLY with valid JSON matching this exact schema:
     console.error("Email analysis failed:", error);
     return MOCK_ANALYSIS;
   }
+}
+
+const CITY_IATA_MAP: Record<string, string> = {
+  athens: 'ATH', rome: 'FCO', paris: 'CDG', london: 'LHR', santorini: 'JTR',
+  hamburg: 'HAM', berlin: 'BER', munich: 'MUC', frankfurt: 'FRA', vienna: 'VIE',
+  barcelona: 'BCN', madrid: 'MAD', lisbon: 'LIS', amsterdam: 'AMS', istanbul: 'IST',
+  crete: 'HER', mykonos: 'JMK', dubrovnik: 'DBV', zurich: 'ZRH', milan: 'MXP',
+  prague: 'PRG', budapest: 'BUD', florence: 'FLR', venice: 'VCE', naples: 'NAP',
+  thessaloniki: 'SKG', rhodes: 'RHO', corfu: 'CFU', nice: 'NCE', malaga: 'AGP',
+  tokyo: 'NRT', bangkok: 'BKK', dubai: 'DXB', cairo: 'CAI', marrakech: 'RAK',
+};
+
+function detectMultiLegMock(emailText: string): EmailAnalysis {
+  const lower = emailText.toLowerCase();
+  const detectedCities: { name: string; iata: string }[] = [];
+
+  for (const [city, iata] of Object.entries(CITY_IATA_MAP)) {
+    if (lower.includes(city)) {
+      // Capitalize the city name
+      const name = city.charAt(0).toUpperCase() + city.slice(1);
+      detectedCities.push({ name, iata });
+    }
+  }
+
+  // Filter out potential origin cities (Hamburg, Berlin, etc.) if they appear with clear destinations
+  const originKeywords = ['hamburg', 'berlin', 'munich', 'frankfurt', 'london', 'paris', 'amsterdam', 'vienna', 'zurich'];
+  const destinations = detectedCities.filter(c => !originKeywords.includes(c.name.toLowerCase()));
+  const origins = detectedCities.filter(c => originKeywords.includes(c.name.toLowerCase()));
+
+  // If we have 2+ distinct destinations, create legs
+  if (destinations.length >= 2) {
+    const origin = origins[0] || { name: 'Hamburg', iata: 'HAM' };
+    const nightsPerLeg = Math.max(2, Math.floor(7 / destinations.length));
+    const totalNights = nightsPerLeg * destinations.length;
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() + 14);
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + totalNights);
+
+    const legs: import("./types").TripLeg[] = destinations.map(d => ({
+      destination: d.name,
+      destinationIATA: d.iata,
+      nights: nightsPerLeg,
+      budget: { min: 120, max: 150, currency: 'EUR' },
+      interests: MOCK_ANALYSIS.interests,
+    }));
+
+    return {
+      ...MOCK_ANALYSIS,
+      origin: origin.name,
+      originIATA: origin.iata,
+      destination: destinations[0].name,
+      destinationIATA: destinations[0].iata,
+      dates: {
+        start: startDate.toISOString().split('T')[0],
+        end: endDate.toISOString().split('T')[0],
+        duration: totalNights,
+      },
+      legs,
+    };
+  }
+
+  return MOCK_ANALYSIS;
 }
 
 function guessIATA(city: string): string {

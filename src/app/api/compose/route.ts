@@ -37,7 +37,8 @@ export async function POST(request: Request) {
           body.email,
           body.selectedFlight ?? undefined,
           body.selectedHotel ?? undefined,
-          composerSettings
+          composerSettings,
+          body.perLegSelections ?? undefined
         );
 
         for await (const chunk of gen) {
