@@ -19,6 +19,9 @@ export interface TripLeg {
   interests: string[];
 }
 
+/** @deprecated Use TripLeg instead */
+export type LegAnalysis = TripLeg;
+
 export interface EmailAnalysis {
   origin: string;
   originIATA: string;
