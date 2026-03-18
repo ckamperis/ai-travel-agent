@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Plane, Building2, Search, MapPin, Loader2, CheckCircle,
   Star, TrainFront, ChevronDown, ChevronUp, ExternalLink,
@@ -148,7 +148,7 @@ export default function LegResults({
         {flights.length > 0 && (<div>
           <div className="flex gap-2 mb-3"><span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Sort:</span>{(['price', 'duration', 'stops'] as const).map(s => (<button key={s} onClick={() => setFlightSort(s)} className="text-xs cursor-pointer transition-colors" style={{ color: flightSort === s ? 'var(--color-primary)' : 'var(--color-text-muted)', fontWeight: flightSort === s ? 500 : 400 }}>{s.charAt(0).toUpperCase() + s.slice(1)}</button>))}</div>
           <div className="glass-card overflow-hidden"><table className="w-full text-sm"><thead><tr className="border-b text-left text-[11px] uppercase tracking-wider" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}><th className="w-10 px-4 py-2.5" /><th className="px-4 py-2.5 font-medium">Airline</th><th className="px-4 py-2.5 font-medium">Departure</th><th className="px-4 py-2.5 font-medium">Arrival</th><th className="px-4 py-2.5 font-medium">Stops</th><th className="px-4 py-2.5 font-medium">Duration</th><th className="px-4 py-2.5 font-medium text-right">Price</th></tr></thead>
-          <tbody>{sortedFlights.map((f, i) => { const origIdx = flights.indexOf(f); const isExpanded = origIdx === expandedFlightIdx && origIdx === selectedFlightIdx; return (<>
+          <tbody>{sortedFlights.map((f, i) => { const origIdx = flights.indexOf(f); const isExpanded = origIdx === expandedFlightIdx && origIdx === selectedFlightIdx; return (<React.Fragment key={`flight-${i}`}>
             <tr key={`row-${i}`} onClick={() => { onSelectFlight(origIdx); setExpandedFlightIdx(origIdx === expandedFlightIdx ? -1 : origIdx); }} className="border-b last:border-0 cursor-pointer transition-all" style={{ borderColor: 'var(--color-border)', background: origIdx === selectedFlightIdx ? 'var(--color-primary-light)' : undefined }}>
               <td className="px-4 py-3"><div className="flex h-5 w-5 items-center justify-center rounded-full border" style={{ borderColor: origIdx === selectedFlightIdx ? 'var(--color-primary)' : 'var(--color-border)', background: origIdx === selectedFlightIdx ? 'var(--color-primary-light)' : undefined }}>{origIdx === selectedFlightIdx && <Check size={12} style={{ color: 'var(--color-primary)' }} />}</div></td>
               <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text)' }}>{f.airline}</td>
@@ -187,7 +187,7 @@ export default function LegResults({
                 </div>
               </td></tr>
             )}
-          </>); })}</tbody></table></div>
+          </React.Fragment>); })}</tbody></table></div>
 
           {/* Per-leg pricing summary below flight table */}
           {selectedFlightIdx >= 0 && flights[selectedFlightIdx] && (
