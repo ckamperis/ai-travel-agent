@@ -21,9 +21,9 @@ A product-ready AI-powered email assistant that handles travel inquiries. Multip
 │Flight│Hotel │Research│Places│  Composer      │
 │Agent │Agent │Agent  │Agent │  Agent         │
 │      │      │       │      │               │
-│Duffel│Booking│GPT-4o │Google│  GPT-4o       │
-│API   │COM API│       │Places│  (synthesis)  │
-│(test)│+GPT4o│       │API   │               │
+│Sky   │Booking│GPT-4o │Google│  GPT-4o       │
+│Scrpr │COM API│       │Places│  (synthesis)  │
+│+GPT4o│+GPT4o│       │API   │               │
 └──────┴──────┴──────┴──────┴────────────────┘
 ```
 
@@ -32,7 +32,7 @@ A product-ready AI-powered email assistant that handles travel inquiries. Multip
 - **UI:** React + Tailwind CSS
 - **Streaming:** Server-Sent Events (SSE) for real-time agent updates
 - **AI:** OpenAI API (gpt-4o)
-- **Flight Data:** Duffel API (test mode — no signup needed)
+- **Flight Data:** Sky Scrapper API via RapidAPI (real data) → GPT-4o fallback → generic fallback
 - **Hotel Data:** Booking.com API via RapidAPI (real data) → GPT-4o fallback → generic fallback
 - **Places/POI:** Google Places API (New, v1)
 - **Language:** TypeScript throughout
@@ -41,12 +41,8 @@ A product-ready AI-powered email assistant that handles travel inquiries. Multip
 ```
 OPENAI_API_KEY=sk-...                 # OpenAI API — from platform.openai.com
 GOOGLE_PLACES_API_KEY=AIza...         # Google Cloud Console → Places API (New)
-DUFFEL_API_KEY=duffel_test            # Test mode — works immediately, no signup
-RAPIDAPI_KEY=...                      # RapidAPI — for Booking.com hotel data
+RAPIDAPI_KEY=...                      # RapidAPI — for Sky Scrapper flights + Booking.com hotels
 ```
-
-Note: Duffel test key `duffel_test` returns simulated but realistic flight data.
-When ready for real data, sign up at https://app.duffel.com and get a live key.
 
 ## Project Structure
 ```
@@ -89,7 +85,7 @@ ai-travel-agent/
 │   │   ├── markdown-strip.ts         # Strip markdown from AI output
 │   │   ├── email-to-html.ts          # Convert plain text to styled HTML preview
 │   │   ├── weather.ts                # Weather forecasts (Open-Meteo + fallback)
-│   │   ├── duffel.ts                 # Duffel API client
+│   │   ├── skyscrapper-api.ts         # Sky Scrapper API client (flights via RapidAPI)
 │   │   ├── google-places.ts          # Google Places API client (GPT-4o fallback)
 │   │   ├── booking-api.ts            # Booking.com API client via RapidAPI
 │   │   └── hotel-fallback.ts         # Generic fallback hotel generator
@@ -105,14 +101,15 @@ ai-travel-agent/
 
 ### 2. Flight Agent
 - **Input:** Origin IATA, destination IATA, dates, passengers
-- **Process:** Duffel Offer Requests API (test mode)
-- **Output:** Top 3-5 flight options with price, times, airline, stops
-- **API:** Duffel (key: duffel_test)
-- **Duffel flow:**
-  1. POST /air/offer_requests — create search
-  2. Response includes offers[] with slices, segments, price
-  3. Parse and return top results sorted by price
-- **Fallback:** If Duffel fails, return curated mock flight data
+- **Process:** 3-tier fallback: Sky Scrapper API → GPT-4o → generic fallback
+- **Output:** Top 5 flight options with price, times, airline, stops
+- **API:** Sky Scrapper via RapidAPI (real data), OpenAI GPT-4o (AI suggestions)
+- **Sky Scrapper flow:**
+  1. GET /api/v1/flights/searchAirport — resolve IATA to skyId + entityId (cached)
+  2. GET /api/v2/flights/searchFlights — search with skyIds, entityIds, date, adults
+  3. Parse itineraries: extract airline, departure/arrival, price, stops, duration
+- **Source badge:** "Live" = Sky Scrapper API, "AI" = GPT-4o, no badge = fallback
+- **Fallback:** GPT-4o generates realistic flights; last resort = generic mock data
 
 ### 3. Hotel Agent
 - **Input:** City, check-in/out dates, guests, budget range
@@ -206,45 +203,33 @@ Settings: `{ responseLanguage, tone, emailSignature, defaultGreeting, includePri
 - **Agents, Templates, Profile**: unchanged from before
 - **Processed**: history table with composed response stored
 
-## Duffel API Reference
-- **Base URL:** https://api.duffel.com
-- **Auth:** Bearer token in header
-- **Test key:** `duffel_test` (returns simulated data, no real bookings)
+## Sky Scrapper API Reference (via RapidAPI)
+- **Base URL:** https://sky-scrapper.p.rapidapi.com
+- **Auth:** X-RapidAPI-Key + X-RapidAPI-Host headers (same RAPIDAPI_KEY as Booking.com)
+
+### Search Airport
+```
+GET /api/v1/flights/searchAirport?query=Athens&locale=en-US
+→ { data: [{ navigation: { relevantFlightParams: { skyId, entityId, localizedName } } }] }
+```
 
 ### Search Flights
 ```
-POST /air/offer_requests
-Headers:
-  Authorization: Bearer duffel_test
-  Duffel-Version: v2
-  Content-Type: application/json
-
-Body:
-{
-  "data": {
-    "slices": [
-      {
-        "origin": "HAM",
-        "destination": "ATH",
-        "departure_date": "2025-08-04"
-      }
-    ],
-    "passengers": [
-      { "type": "adult" },
-      { "type": "adult" }
-    ],
-    "cabin_class": "economy"
-  }
-}
-
-Response: { data: { offers: [...], slices: [...] } }
-Each offer has:
-  - total_amount, total_currency
-  - owner.name (airline)
-  - slices[].segments[].departing_at, arriving_at
-  - slices[].segments[].origin.iata_code, destination.iata_code
-  - slices[].segments[].marketing_carrier.name
+GET /api/v2/flights/searchFlights?originSkyId=HAM&destinationSkyId=ATH&originEntityId=27539604&destinationEntityId=95673635&date=2026-04-01&adults=2&cabinClass=economy&currency=EUR&sortBy=best
+→ { data: { itineraries: [...] } }
+Each itinerary has:
+  - price.raw, price.formatted
+  - legs[].origin.displayCode, legs[].destination.displayCode
+  - legs[].departure, legs[].arrival (ISO datetime)
+  - legs[].durationInMinutes
+  - legs[].stopCount
+  - legs[].carriers.marketing[].name
 ```
+
+### Flight Agent Fallback Chain
+1. **Sky Scrapper API** (RAPIDAPI_KEY) → real flight data with prices, airlines, times
+2. **GPT-4o** (OPENAI_API_KEY) → AI generates realistic flights with approximate data
+3. **Generic fallback** → mock flights with seeded airlines/prices
 
 ## Google Places API Reference (New v1)
 ```

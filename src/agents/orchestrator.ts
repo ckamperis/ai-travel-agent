@@ -1,6 +1,6 @@
 import { AgentEvent, AgentName, AgentStatus, EmailAnalysis, TripLeg } from "./types";
 import { analyzeEmail } from "./email-analyzer";
-import { searchFlights } from "./flight-agent";
+import { searchFlights, type FlightSearchResult } from "./flight-agent";
 import { searchHotels, type HotelSearchResult } from "./hotel-agent";
 import { researchDestination } from "./research-agent";
 import { searchPlaces } from "./places-agent";
@@ -21,7 +21,7 @@ function makeEvent(
 function getAgentSource(agent: AgentName): 'live' | 'ai' | 'mock' {
   switch (agent) {
     case 'email': return process.env.OPENAI_API_KEY ? 'live' : 'mock';
-    case 'flight': return process.env.DUFFEL_API_KEY ? 'live' : 'mock';
+    case 'flight': return process.env.RAPIDAPI_KEY ? 'live' : process.env.OPENAI_API_KEY ? 'ai' : 'mock';
     case 'hotel': return process.env.RAPIDAPI_KEY ? 'live' : process.env.OPENAI_API_KEY ? 'ai' : 'mock';
     case 'research': return process.env.OPENAI_API_KEY ? 'live' : 'mock';
     case 'places': return process.env.GOOGLE_PLACES_API_KEY ? 'live' : 'mock';
@@ -61,7 +61,7 @@ export async function* orchestrate(
 
   // ── Phase 2: Parallel Agents ──────────────────────────────────────
   console.log(`[Orchestrator] Dispatching agents for: ${analysis.origin}(${analysis.originIATA}) → ${analysis.destination}(${analysis.destinationIATA}), ${analysis.dates.duration} days`);
-  yield makeEvent("flight", "started", `Duffel API: ${analysis.originIATA} → ${analysis.destinationIATA}`);
+  yield makeEvent("flight", "started", `Sky Scrapper: ${analysis.originIATA} → ${analysis.destinationIATA}`);
   yield makeEvent("hotel", "started", `Hotels in ${analysis.destination}`);
   yield makeEvent("research", "started", `GPT-4o: ${analysis.dates.duration}-day itinerary for ${analysis.destination}`);
   yield makeEvent("places", "started", `Google Places: ${analysis.destination}`);
@@ -82,13 +82,10 @@ export async function* orchestrate(
     return new Promise((r) => { notifyResolve = r; });
   };
 
-  type ResultKey = "flights" | "hotels" | "research" | "places";
-
   const runAgent = async (
     name: AgentName,
     fn: () => Promise<unknown>,
     doneMsg: string,
-    key: ResultKey
   ) => {
     try {
       const data = await fn();
@@ -99,7 +96,16 @@ export async function* orchestrate(
     notify();
   };
 
-  runAgent("flight", () => searchFlights(analysis), "Flights found", "flights");
+  // Flight agent returns { flights, source } — unwrap and use actual source
+  (async () => {
+    try {
+      const result: FlightSearchResult = await searchFlights(analysis);
+      arrivals.push(makeEvent("flight", "done", "Flights found", result.flights, result.source));
+    } catch {
+      arrivals.push(makeEvent("flight", "error", "Agent failed: flight"));
+    }
+    notify();
+  })();
   // Hotel agent returns { hotels, source } — unwrap and use actual source
   (async () => {
     try {
@@ -110,8 +116,8 @@ export async function* orchestrate(
     }
     notify();
   })();
-  runAgent("research", () => researchDestination(analysis), "Research complete", "research");
-  runAgent("places", () => searchPlaces(analysis), "Places found", "places");
+  runAgent("research", () => researchDestination(analysis), "Research complete");
+  runAgent("places", () => searchPlaces(analysis), "Places found");
 
   while (yielded < 4) {
     await waitForArrival();
@@ -240,11 +246,11 @@ export async function* orchestrateMultiLeg(
   for (let i = 0; i < legs.length; i++) {
     const legAnalysis = buildLegAnalysis(analysis, legs[i], i, legs, analysis.dates.start);
 
-    // Flight
+    // Flight — returns { flights, source }
     (async () => {
       try {
-        const data = await searchFlights(legAnalysis);
-        pushEvent(makeEvent("flight", "done", `Leg ${i + 1}: Flights found`, data, getAgentSource("flight"), i));
+        const result: FlightSearchResult = await searchFlights(legAnalysis);
+        pushEvent(makeEvent("flight", "done", `Leg ${i + 1}: Flights found`, result.flights, result.source, i));
       } catch {
         pushEvent(makeEvent("flight", "error", `Leg ${i + 1}: Flight search failed`, undefined, undefined, i));
       }
@@ -296,8 +302,8 @@ export async function* orchestrateMultiLeg(
         },
         legs: undefined,
       };
-      const data = await searchFlights(returnAnalysis);
-      pushEvent(makeEvent("flight", "done", `Return: Flights found`, data, getAgentSource("flight"), legs.length));
+      const result: FlightSearchResult = await searchFlights(returnAnalysis);
+      pushEvent(makeEvent("flight", "done", `Return: Flights found`, result.flights, result.source, legs.length));
     } catch {
       pushEvent(makeEvent("flight", "error", `Return: Flight search failed`, undefined, undefined, legs.length));
     }
@@ -319,7 +325,7 @@ export async function* orchestrateMultiLeg(
  */
 async function* orchestrateSingleLegAgents(analysis: EmailAnalysis): AsyncGenerator<AgentEvent> {
   console.log(`[Orchestrator] Single-leg: ${analysis.origin}(${analysis.originIATA}) → ${analysis.destination}(${analysis.destinationIATA}), ${analysis.dates.duration} days`);
-  yield makeEvent("flight", "started", `Duffel API: ${analysis.originIATA} → ${analysis.destinationIATA}`);
+  yield makeEvent("flight", "started", `Sky Scrapper: ${analysis.originIATA} → ${analysis.destinationIATA}`);
   yield makeEvent("hotel", "started", `Hotels in ${analysis.destination}`);
   yield makeEvent("research", "started", `GPT-4o: ${analysis.dates.duration}-day itinerary for ${analysis.destination}`);
   yield makeEvent("places", "started", `Google Places: ${analysis.destination}`);
@@ -344,7 +350,16 @@ async function* orchestrateSingleLegAgents(analysis: EmailAnalysis): AsyncGenera
     notify();
   };
 
-  runAgent("flight", () => searchFlights(analysis), "Flights found");
+  // Flight agent returns { flights, source } — unwrap and use actual source
+  (async () => {
+    try {
+      const result: FlightSearchResult = await searchFlights(analysis);
+      arrivals.push(makeEvent("flight", "done", "Flights found", result.flights, result.source));
+    } catch {
+      arrivals.push(makeEvent("flight", "error", "Agent failed: flight"));
+    }
+    notify();
+  })();
   // Hotel agent returns { hotels, source } — unwrap and use actual source
   (async () => {
     try {
