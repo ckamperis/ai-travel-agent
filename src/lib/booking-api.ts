@@ -1,6 +1,7 @@
 import { HotelResult } from "@/agents/types";
 
 const BASE_URL = "https://booking-com15.p.rapidapi.com";
+const RATE_LIMIT_MS = 1500;
 
 function getHeaders(): Record<string, string> {
   const key = process.env.RAPIDAPI_KEY;
@@ -11,7 +12,49 @@ function getHeaders(): Record<string, string> {
   };
 }
 
-/* ── Step A: Resolve destination ID ─────────────────────────────── */
+/* ── Rate limiter: max 1 API call per 1.5s ─────────────────────── */
+
+let rateLimitQueue: Promise<void> = Promise.resolve();
+let lastCallTime = 0;
+
+async function rateLimitedFetch(url: string): Promise<Response> {
+  const execute = async (): Promise<Response> => {
+    const now = Date.now();
+    const waitMs = Math.max(0, RATE_LIMIT_MS - (now - lastCallTime));
+    if (waitMs > 0) await new Promise(r => setTimeout(r, waitMs));
+    lastCallTime = Date.now();
+    return fetch(url, { headers: getHeaders() });
+  };
+
+  const resultPromise = rateLimitQueue.then(execute, execute);
+  rateLimitQueue = resultPromise.then(() => {}, () => {});
+  return resultPromise;
+}
+
+async function fetchWithRetry(url: string): Promise<Response | null> {
+  const res = await rateLimitedFetch(url);
+
+  if (res.status === 403) {
+    console.warn("[BookingAPI] RapidAPI key not subscribed to Booking.com API — using fallback");
+    return null;
+  }
+
+  if (res.status === 429) {
+    console.warn("[BookingAPI] Rate limited, retrying in 2s...");
+    await new Promise(r => setTimeout(r, 2000));
+    lastCallTime = Date.now();
+    const retry = await fetch(url, { headers: getHeaders() });
+    if (retry.status === 429 || retry.status === 403) {
+      console.warn("[BookingAPI] Rate limited, falling back to GPT-4o");
+      return null;
+    }
+    return retry;
+  }
+
+  return res;
+}
+
+/* ── Step A: Resolve destination ID (with cache) ──────────────── */
 
 interface DestinationResult {
   dest_id: string;
@@ -19,10 +62,16 @@ interface DestinationResult {
   label: string;
 }
 
-export async function searchDestination(city: string): Promise<DestinationResult | null> {
-  const url = `${BASE_URL}/api/v1/hotels/searchDestination?query=${encodeURIComponent(city)}`;
-  const res = await fetch(url, { headers: getHeaders() });
+const destinationCache = new Map<string, DestinationResult>();
 
+export async function searchDestination(city: string): Promise<DestinationResult | null> {
+  const cacheKey = city.toLowerCase().trim();
+  if (destinationCache.has(cacheKey)) return destinationCache.get(cacheKey)!;
+
+  const url = `${BASE_URL}/api/v1/hotels/searchDestination?query=${encodeURIComponent(city)}`;
+  const res = await fetchWithRetry(url);
+
+  if (!res) return null; // 403/429 — trigger fallback
   if (!res.ok) {
     console.error(`[BookingAPI] searchDestination failed ${res.status}: ${await res.text()}`);
     return null;
@@ -43,11 +92,14 @@ export async function searchDestination(city: string): Promise<DestinationResult
   );
   const best = cityResult || results[0];
 
-  return {
+  const result: DestinationResult = {
     dest_id: String(best.dest_id),
     search_type: best.search_type || best.dest_type || "city",
     label: best.label || best.name || city,
   };
+
+  destinationCache.set(cacheKey, result);
+  return result;
 }
 
 /* ── Step B: Search hotels ──────────────────────────────────────── */
@@ -76,8 +128,9 @@ export async function searchBookingHotels(opts: {
   });
 
   const url = `${BASE_URL}/api/v1/hotels/searchHotels?${params}`;
-  const res = await fetch(url, { headers: getHeaders() });
+  const res = await fetchWithRetry(url);
 
+  if (!res) return []; // 403/429 — trigger fallback
   if (!res.ok) {
     console.error(`[BookingAPI] searchHotels failed ${res.status}: ${await res.text()}`);
     return [];
@@ -128,9 +181,9 @@ export async function locationToLatLong(query: string): Promise<{ lat: number; l
 
   try {
     const url = `${BASE_URL}/api/v1/meta/locationToLatLong?query=${encodeURIComponent(query)}`;
-    const res = await fetch(url, { headers: getHeaders() });
+    const res = await fetchWithRetry(url);
 
-    if (!res.ok) return null;
+    if (!res || !res.ok) return null;
 
     const json = await res.json();
     const data = json.data ?? json;

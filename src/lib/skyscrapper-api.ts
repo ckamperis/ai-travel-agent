@@ -1,6 +1,7 @@
 import { FlightResult } from "@/agents/types";
 
 const BASE_URL = "https://sky-scrapper.p.rapidapi.com";
+const RATE_LIMIT_MS = 1500;
 
 function getHeaders(): Record<string, string> {
   const key = process.env.RAPIDAPI_KEY;
@@ -9,6 +10,60 @@ function getHeaders(): Record<string, string> {
     "X-RapidAPI-Key": key,
     "X-RapidAPI-Host": "sky-scrapper.p.rapidapi.com",
   };
+}
+
+/* ── Rate limiter: max 1 API call per 1.5s ─────────────────────── */
+
+let rateLimitQueue: Promise<void> = Promise.resolve();
+let lastCallTime = 0;
+
+async function rateLimitedFetch(url: string): Promise<Response> {
+  // Chain onto previous call — ensures sequential execution with delay
+  const execute = async (): Promise<Response> => {
+    const now = Date.now();
+    const waitMs = Math.max(0, RATE_LIMIT_MS - (now - lastCallTime));
+    if (waitMs > 0) await new Promise(r => setTimeout(r, waitMs));
+    lastCallTime = Date.now();
+    return fetch(url, { headers: getHeaders() });
+  };
+
+  // Queue this call after any pending ones
+  const resultPromise = rateLimitQueue.then(execute, execute);
+  // Update queue (swallow errors so next call still runs)
+  rateLimitQueue = resultPromise.then(() => {}, () => {});
+  return resultPromise;
+}
+
+/* ── 429/403 retry logic ────────────────────────────────────────── */
+
+let subscriptionWarned = false;
+
+async function fetchWithRetry(url: string): Promise<Response | null> {
+  const res = await rateLimitedFetch(url);
+
+  // 403 = not subscribed
+  if (res.status === 403) {
+    if (!subscriptionWarned) {
+      subscriptionWarned = true;
+      console.warn("[SkyScrapper] RapidAPI key not subscribed to Sky Scrapper API — using GPT-4o for flights");
+    }
+    return null;
+  }
+
+  // 429 = rate limited — wait 2s and retry once
+  if (res.status === 429) {
+    console.warn("[SkyScrapper] Rate limited, retrying in 2s...");
+    await new Promise(r => setTimeout(r, 2000));
+    lastCallTime = Date.now(); // reset rate limiter after wait
+    const retry = await fetch(url, { headers: getHeaders() });
+    if (retry.status === 429 || retry.status === 403) {
+      console.warn("[SkyScrapper] Rate limited, falling back to GPT-4o");
+      return null;
+    }
+    return retry;
+  }
+
+  return res;
 }
 
 /* ── Airport lookup with cache ─────────────────────────────────── */
@@ -26,8 +81,9 @@ export async function searchAirport(query: string): Promise<AirportInfo | null> 
   if (airportCache.has(cacheKey)) return airportCache.get(cacheKey)!;
 
   const url = `${BASE_URL}/api/v1/flights/searchAirport?query=${encodeURIComponent(query)}&locale=en-US`;
-  const res = await fetch(url, { headers: getHeaders() });
+  const res = await fetchWithRetry(url);
 
+  if (!res) return null; // 403/429 — trigger fallback
   if (!res.ok) {
     console.error(`[SkyScrapper] searchAirport failed ${res.status}: ${await res.text()}`);
     return null;
@@ -79,14 +135,16 @@ export async function searchSkyscrapperFlights(
   adults: number = 2,
   currency: string = "EUR"
 ): Promise<FlightResult[]> {
-  // Step A: Resolve both airports to get entityIds
-  const [originAirport, destAirport] = await Promise.all([
-    searchAirport(originIATA),
-    searchAirport(destinationIATA),
-  ]);
+  // Step A: Resolve airports sequentially (rate limit friendly, cache helps)
+  const originAirport = await searchAirport(originIATA);
+  if (!originAirport) {
+    console.error(`[SkyScrapper] Could not resolve origin airport: ${originIATA}`);
+    return [];
+  }
 
-  if (!originAirport || !destAirport) {
-    console.error(`[SkyScrapper] Could not resolve airports: origin=${originIATA} (${originAirport ? "ok" : "fail"}), dest=${destinationIATA} (${destAirport ? "ok" : "fail"})`);
+  const destAirport = await searchAirport(destinationIATA);
+  if (!destAirport) {
+    console.error(`[SkyScrapper] Could not resolve destination airport: ${destinationIATA}`);
     return [];
   }
 
@@ -106,8 +164,9 @@ export async function searchSkyscrapperFlights(
   });
 
   const url = `${BASE_URL}/api/v2/flights/searchFlights?${params}`;
-  const res = await fetch(url, { headers: getHeaders() });
+  const res = await fetchWithRetry(url);
 
+  if (!res) return []; // 403/429 — trigger fallback
   if (!res.ok) {
     console.error(`[SkyScrapper] searchFlights failed ${res.status}: ${await res.text()}`);
     return [];

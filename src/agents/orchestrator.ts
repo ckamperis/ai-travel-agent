@@ -172,8 +172,8 @@ function buildLegAnalysis(
 }
 
 /**
- * Multi-leg orchestration: runs all legs in parallel, each leg runs its
- * 4 agents (flight, hotel, research, places) in parallel internally.
+ * Multi-leg orchestration: runs flight + hotel SEQUENTIALLY per leg
+ * (to avoid RapidAPI rate limits), while research + places run in PARALLEL.
  * Also adds a return flight from the last leg back to origin.
  */
 export async function* orchestrateMultiLeg(
@@ -201,8 +201,6 @@ export async function* orchestrateMultiLeg(
 
   // If not actually multi-leg, delegate to regular orchestrate
   if (!analysis.legs || analysis.legs.length <= 1) {
-    // Re-yield the analysis events won't work since we already yielded them.
-    // Just run the agent phase from the regular orchestrate logic.
     yield* orchestrateSingleLegAgents(analysis);
     return;
   }
@@ -210,7 +208,7 @@ export async function* orchestrateMultiLeg(
   const legs = analysis.legs;
   console.log(`[Orchestrator] Multi-leg trip: ${legs.length} destinations — ${legs.map(l => l.destination).join(' → ')}`);
 
-  // ── Phase 2: Parallel per-leg agents ────────────────────────────
+  // ── Phase 2: Sequential flight+hotel, parallel research+places ──
   const totalAgents = legs.length * 4 + 1; // 4 agents per leg + 1 return flight
   const arrivals: AgentEvent[] = [];
   let notifyResolve: (() => void) | null = null;
@@ -229,7 +227,7 @@ export async function* orchestrateMultiLeg(
     notify();
   };
 
-  // Emit started events for all legs
+  // Emit started events for all legs upfront
   for (let i = 0; i < legs.length; i++) {
     const leg = legs[i];
     const fromIATA = i === 0 ? analysis.originIATA : legs[i - 1].destinationIATA;
@@ -238,57 +236,55 @@ export async function* orchestrateMultiLeg(
     yield makeEvent("research", "started", `Leg ${i + 1}: ${leg.nights}-day itinerary for ${leg.destination}`, undefined, undefined, i);
     yield makeEvent("places", "started", `Leg ${i + 1}: Places in ${leg.destination}`, undefined, undefined, i);
   }
-  // Return flight
   const lastLeg = legs[legs.length - 1];
   yield makeEvent("flight", "started", `Return: ${lastLeg.destinationIATA} → ${analysis.originIATA}`, undefined, undefined, legs.length);
 
-  // Launch all legs in parallel
-  for (let i = 0; i < legs.length; i++) {
-    const legAnalysis = buildLegAnalysis(analysis, legs[i], i, legs, analysis.dates.start);
+  // Sequential dispatch: flight + hotel awaited per leg, research + places fire-and-forget
+  (async () => {
+    for (let i = 0; i < legs.length; i++) {
+      const legAnalysis = buildLegAnalysis(analysis, legs[i], i, legs, analysis.dates.start);
 
-    // Flight — returns { flights, source }
-    (async () => {
+      // Flight — sequential (awaited)
       try {
         const result: FlightSearchResult = await searchFlights(legAnalysis);
         pushEvent(makeEvent("flight", "done", `Leg ${i + 1}: Flights found`, result.flights, result.source, i));
       } catch {
         pushEvent(makeEvent("flight", "error", `Leg ${i + 1}: Flight search failed`, undefined, undefined, i));
       }
-    })();
 
-    // Hotel — returns { hotels, source }
-    (async () => {
+      // Hotel — sequential (awaited)
       try {
         const result: HotelSearchResult = await searchHotels(legAnalysis);
         pushEvent(makeEvent("hotel", "done", `Leg ${i + 1}: Hotels found`, result.hotels, result.source, i));
       } catch {
         pushEvent(makeEvent("hotel", "error", `Leg ${i + 1}: Hotel search failed`, undefined, undefined, i));
       }
-    })();
 
-    // Research
-    (async () => {
-      try {
-        const data = await researchDestination(legAnalysis);
-        pushEvent(makeEvent("research", "done", `Leg ${i + 1}: Research complete`, data, getAgentSource("research"), i));
-      } catch {
-        pushEvent(makeEvent("research", "error", `Leg ${i + 1}: Research failed`, undefined, undefined, i));
-      }
-    })();
+      // Research — parallel (fire-and-forget, GPT-4o has higher rate limits)
+      (async () => {
+        try {
+          const data = await researchDestination(legAnalysis);
+          pushEvent(makeEvent("research", "done", `Leg ${i + 1}: Research complete`, data, getAgentSource("research"), i));
+        } catch {
+          pushEvent(makeEvent("research", "error", `Leg ${i + 1}: Research failed`, undefined, undefined, i));
+        }
+      })();
 
-    // Places
-    (async () => {
-      try {
-        const data = await searchPlaces(legAnalysis);
-        pushEvent(makeEvent("places", "done", `Leg ${i + 1}: Places found`, data, getAgentSource("places"), i));
-      } catch {
-        pushEvent(makeEvent("places", "error", `Leg ${i + 1}: Places search failed`, undefined, undefined, i));
-      }
-    })();
-  }
+      // Places — parallel (fire-and-forget, Google Places has higher rate limits)
+      (async () => {
+        try {
+          const data = await searchPlaces(legAnalysis);
+          pushEvent(makeEvent("places", "done", `Leg ${i + 1}: Places found`, data, getAgentSource("places"), i));
+        } catch {
+          pushEvent(makeEvent("places", "error", `Leg ${i + 1}: Places search failed`, undefined, undefined, i));
+        }
+      })();
 
-  // Return flight: last destination → origin
-  (async () => {
+      // Small delay before next leg to further space out API calls
+      if (i < legs.length - 1) await new Promise(r => setTimeout(r, 500));
+    }
+
+    // Return flight: last destination → origin (after all legs complete)
     try {
       const returnAnalysis: EmailAnalysis = {
         ...analysis,
