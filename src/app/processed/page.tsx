@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckSquare, Inbox, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { CheckSquare, Inbox, CheckCircle, AlertCircle, Clock, X, Mail, MapPin, Timer } from 'lucide-react';
 import { loadHistory, type ProcessedEmail } from '@/lib/settings';
 
 function fmtDate(iso: string): string {
@@ -20,6 +20,7 @@ function fmtDate(iso: string): string {
 
 export default function ProcessedPage() {
   const [history, setHistory] = useState<ProcessedEmail[]>([]);
+  const [selected, setSelected] = useState<ProcessedEmail | null>(null);
 
   useEffect(() => {
     setHistory(loadHistory());
@@ -83,8 +84,11 @@ export default function ProcessedPage() {
               {history.map((entry) => (
                 <tr
                   key={entry.id}
-                  className="transition-colors duration-150"
+                  onClick={() => setSelected(entry)}
+                  className="transition-colors duration-150 cursor-pointer"
                   style={{ borderBottom: '1px solid color-mix(in srgb, var(--color-border) 40%, transparent)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 >
                   {/* From */}
                   <td className="px-5 py-3.5">
@@ -155,6 +159,88 @@ export default function ProcessedPage() {
         <p className="mt-4 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
           Showing {history.length} processed email{history.length !== 1 ? 's' : ''}
         </p>
+      )}
+
+      {/* -- Detail Modal ---------------------------------------- */}
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSelected(null)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl shadow-2xl animate-scale-in"
+            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="sticky top-0 flex items-center justify-between px-6 py-4 border-b z-10"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg"
+                  style={{ background: 'var(--color-green-light)' }}>
+                  <CheckSquare size={16} style={{ color: 'var(--color-green)' }} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                    {selected.customerName || selected.from}
+                  </h3>
+                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{selected.subject}</p>
+                </div>
+              </div>
+              <button onClick={() => setSelected(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg cursor-pointer transition-colors"
+                style={{ color: 'var(--color-text-muted)' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal body */}
+            <div className="px-6 py-5 space-y-5">
+              {/* Meta chips */}
+              <div className="flex flex-wrap gap-3">
+                {selected.destination && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
+                    style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
+                    <MapPin size={12} /> {selected.destination}
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
+                  style={{ background: 'var(--color-green-light)', color: 'var(--color-green)' }}>
+                  <Timer size={12} /> {selected.totalTime}s
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs"
+                  style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-muted)' }}>
+                  {fmtDate(selected.processedAt)}
+                </span>
+                {selected.customerEmail && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs"
+                    style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-muted)' }}>
+                    <Mail size={12} /> {selected.customerEmail}
+                  </span>
+                )}
+              </div>
+
+              {/* Composed Response */}
+              {selected.composedResponse ? (
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider mb-2"
+                    style={{ color: 'var(--color-text-muted)' }}>
+                    Composed Response
+                  </h4>
+                  <div className="rounded-lg px-5 py-4 text-sm leading-relaxed whitespace-pre-wrap"
+                    style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}>
+                    {selected.composedResponse}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg px-5 py-8 text-center"
+                  style={{ background: 'var(--color-bg-secondary)' }}>
+                  <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                    No composed response stored for this email
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Footer */}

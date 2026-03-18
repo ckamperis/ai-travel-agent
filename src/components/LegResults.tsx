@@ -144,7 +144,10 @@ export default function LegResults({
 
       {/* FLIGHTS */}
       {activeTab === 'flights' && (<div>
-        {agentStatuses.flight === 'active' && <div className="flex items-center gap-3 py-12 justify-center" style={{ color: 'var(--color-text-muted)' }}><Loader2 size={20} className="animate-spin" style={{ color: 'var(--color-primary)' }} /> Searching flights...</div>}
+        {agentStatuses.flight === 'active' && <div className="space-y-3">
+          <div className="flex items-center gap-3 mb-4" style={{ color: 'var(--color-text-muted)' }}><Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-primary)' }} /> <span className="text-sm">Searching flights...</span></div>
+          {[1,2,3].map(i => <div key={i} className="glass-card p-4 animate-pulse"><div className="flex items-center gap-4"><div className="h-4 w-24 rounded" style={{ background: 'var(--color-border)' }} /><div className="h-4 w-16 rounded" style={{ background: 'var(--color-border)' }} /><div className="flex-1" /><div className="h-4 w-14 rounded" style={{ background: 'var(--color-border)' }} /></div></div>)}
+        </div>}
         {flights.length > 0 && (<div>
           <div className="flex gap-2 mb-3"><span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Sort:</span>{(['price', 'duration', 'stops'] as const).map(s => (<button key={s} onClick={() => setFlightSort(s)} className="text-xs cursor-pointer transition-colors" style={{ color: flightSort === s ? 'var(--color-primary)' : 'var(--color-text-muted)', fontWeight: flightSort === s ? 500 : 400 }}>{s.charAt(0).toUpperCase() + s.slice(1)}</button>))}</div>
           <div className="glass-card overflow-hidden"><table className="w-full text-sm"><thead><tr className="border-b text-left text-[11px] uppercase tracking-wider" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}><th className="w-10 px-4 py-2.5" /><th className="px-4 py-2.5 font-medium">Airline</th><th className="px-4 py-2.5 font-medium">Departure</th><th className="px-4 py-2.5 font-medium">Arrival</th><th className="px-4 py-2.5 font-medium">Stops</th><th className="px-4 py-2.5 font-medium">Duration</th><th className="px-4 py-2.5 font-medium text-right">Price</th></tr></thead>
@@ -201,7 +204,10 @@ export default function LegResults({
 
       {/* HOTELS */}
       {activeTab === 'hotels' && (<div>
-        {agentStatuses.hotel === 'active' && <div className="flex items-center gap-3 py-12 justify-center" style={{ color: 'var(--color-text-muted)' }}><Loader2 size={20} className="animate-spin" style={{ color: 'var(--color-amber)' }} /> Searching hotels...</div>}
+        {agentStatuses.hotel === 'active' && <div className="space-y-3">
+          <div className="flex items-center gap-3 mb-4" style={{ color: 'var(--color-text-muted)' }}><Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-amber)' }} /> <span className="text-sm">Searching hotels...</span></div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[1,2,3].map(i => <div key={i} className="glass-card p-4 animate-pulse"><div className="h-4 w-32 rounded mb-2" style={{ background: 'var(--color-border)' }} /><div className="h-3 w-20 rounded mb-3" style={{ background: 'var(--color-border)' }} /><div className="h-3 w-24 rounded" style={{ background: 'var(--color-border)' }} /></div>)}</div>
+        </div>}
         {hotels.length > 0 && hotelLocs.length > 0 && (
           <div className="mb-4">
             <MapView
@@ -231,7 +237,10 @@ export default function LegResults({
 
       {/* ITINERARY */}
       {activeTab === 'itinerary' && (<div>
-        {agentStatuses.research === 'active' && <div className="flex items-center gap-3 py-12 justify-center" style={{ color: 'var(--color-text-muted)' }}><Loader2 size={20} className="animate-spin" style={{ color: 'var(--color-green)' }} /> Generating itinerary...</div>}
+        {agentStatuses.research === 'active' && <div className="space-y-3">
+          <div className="flex items-center gap-3 mb-4" style={{ color: 'var(--color-text-muted)' }}><Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-green)' }} /> <span className="text-sm">Generating itinerary...</span></div>
+          {[1,2,3].map(i => <div key={i} className="glass-card p-4 animate-pulse"><div className="flex items-center gap-3 mb-2"><div className="h-5 w-14 rounded" style={{ background: 'var(--color-border)' }} /><div className="h-3 w-48 rounded" style={{ background: 'var(--color-border)' }} /></div></div>)}
+        </div>}
         {research && (<div className="space-y-2">
           {parseResearchDays(research).map((d, i) => (
             <div key={i} className="glass-card overflow-hidden">
@@ -248,7 +257,10 @@ export default function LegResults({
 
       {/* PLACES */}
       {activeTab === 'places' && (<div>
-        {agentStatuses.places === 'active' && <div className="flex items-center gap-3 py-12 justify-center" style={{ color: 'var(--color-text-muted)' }}><Loader2 size={20} className="animate-spin" style={{ color: 'var(--color-purple)' }} /> Searching places...</div>}
+        {agentStatuses.places === 'active' && <div className="space-y-3">
+          <div className="flex items-center gap-3 mb-4" style={{ color: 'var(--color-text-muted)' }}><Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-purple)' }} /> <span className="text-sm">Searching places...</span></div>
+          {[1,2,3,4].map(i => <div key={i} className="glass-card px-5 py-3 animate-pulse flex items-center gap-4"><div className="h-4 w-4 rounded" style={{ background: 'var(--color-border)' }} /><div className="flex-1"><div className="h-3 w-36 rounded mb-1" style={{ background: 'var(--color-border)' }} /><div className="h-2 w-48 rounded" style={{ background: 'var(--color-border)' }} /></div></div>)}
+        </div>}
         {places.length > 0 && (() => {
           const placesWithCoords = places.map((p, i) => ({ ...p, origIdx: i })).filter(p => p.lat != null && p.lng != null);
           const visiblePlaceIndices = placesWithCoords

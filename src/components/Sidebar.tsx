@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Inbox, CheckSquare, CalendarClock, Users,
   Settings, Bot, FileText, User, Menu, X, Zap, PanelLeftClose, PanelLeft,
 } from 'lucide-react';
-import { loadFollowUps } from '@/lib/settings';
+import { loadFollowUps, getProcessedSampleIds } from '@/lib/settings';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -29,7 +29,8 @@ export default function Sidebar() {
 
   useEffect(() => {
     const pending = loadFollowUps().filter(f => f.status === 'pending').length;
-    setBadges({ inbox: 3, followups: pending });
+    const unprocessedInbox = Math.max(0, 3 - getProcessedSampleIds().size);
+    setBadges({ inbox: unprocessedInbox, followups: pending });
   }, [pathname]);
 
   const sidebarW = collapsed ? 'w-16' : 'w-60';

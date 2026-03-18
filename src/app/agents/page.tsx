@@ -95,8 +95,8 @@ const INITIAL_AGENTS: AgentDef[] = [
     id: 'flight',
     name: 'Flight Agent',
     description:
-      'Searches for available flights using the Duffel API. Returns pricing, schedules, airlines, and stop information.',
-    apiSource: 'Duffel API',
+      'Searches for available flights using the Sky Scrapper API (via RapidAPI). Returns real pricing, schedules, airlines, and stop information.',
+    apiSource: 'Sky Scrapper API',
     icon: <Plane size={20} />,
     color: '#22D3EE',
     statusBg: 'var(--color-green)',
@@ -109,8 +109,8 @@ const INITIAL_AGENTS: AgentDef[] = [
     id: 'hotel',
     name: 'Hotel Agent',
     description:
-      'Returns curated hotel options with pricing, ratings, metro proximity, and amenities. Enhanced with AI descriptions.',
-    apiSource: 'Curated Selection',
+      'Returns real hotel options from Booking.com with pricing, ratings, metro proximity, and amenities. GPT-4o fallback for AI suggestions.',
+    apiSource: 'Booking.com API',
     icon: <Building2 size={20} />,
     color: '#F59E0B',
     statusBg: 'var(--color-green)',
@@ -124,7 +124,7 @@ const INITIAL_AGENTS: AgentDef[] = [
     name: 'Research Agent',
     description:
       'Generates day-by-day itinerary suggestions, local tips, and destination expertise using AI.',
-    apiSource: 'Claude API',
+    apiSource: 'GPT-4o',
     icon: <Search size={20} />,
     color: '#10B981',
     statusBg: 'var(--color-green)',
@@ -152,7 +152,7 @@ const INITIAL_AGENTS: AgentDef[] = [
     name: 'Composer Agent',
     description:
       'Synthesizes all agent results into a complete, professional response email. Streams output in real time.',
-    apiSource: 'Claude API',
+    apiSource: 'GPT-4o',
     icon: <PenTool size={20} />,
     color: '#EC4899',
     statusBg: 'var(--color-green)',

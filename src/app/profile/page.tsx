@@ -75,7 +75,7 @@ export default function ProfilePage() {
                 type="text"
                 value={profile.agencyName}
                 onChange={(e) => update('agencyName', e.target.value)}
-                placeholder="e.g. Afea Travel"
+                placeholder="Your agency name"
                 className={inputClass}
                 style={inputStyle}
               />
@@ -90,7 +90,7 @@ export default function ProfilePage() {
                 type="text"
                 value={profile.agentName}
                 onChange={(e) => update('agentName', e.target.value)}
-                placeholder="e.g. Maria"
+                placeholder="Your name"
                 className={inputClass}
                 style={inputStyle}
               />
@@ -114,7 +114,7 @@ export default function ProfilePage() {
                   type="email"
                   value={profile.email}
                   onChange={(e) => update('email', e.target.value)}
-                  placeholder="info@afea-travel.com"
+                  placeholder="your@email.com"
                   className="w-full rounded-lg border pl-10 pr-4 py-2.5 text-sm outline-none transition-colors"
                   style={inputStyle}
                 />

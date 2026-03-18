@@ -27,7 +27,7 @@ export interface AppSettings {
 export const DEFAULT_SETTINGS: AppSettings = {
   responseLanguage: 'en',
   tone: 'professional',
-  emailSignature: 'Best regards,\nAfea Travel Team',
+  emailSignature: 'Best regards,\nYour Travel Team',
   defaultGreeting: 'Dear',
   includePriceBreakdown: true,
   includeItinerary: true,
@@ -66,9 +66,9 @@ export interface Profile {
 }
 
 export const DEFAULT_PROFILE: Profile = {
-  agencyName: 'Afea Travel',
-  agentName: 'Maria',
-  email: 'info@afea-travel.com',
+  agencyName: '',
+  agentName: '',
+  email: '',
 };
 
 export function loadProfile(): Profile {

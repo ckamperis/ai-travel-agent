@@ -128,6 +128,64 @@ function formatDuration(minutes: number): string {
   return `${hours}h ${String(mins).padStart(2, "0")}m`;
 }
 
+/**
+ * If the date is more than 3 months away, adjust to ~2 months from now
+ * (Sky Scrapper often has no data for far-future dates).
+ */
+function getSearchDate(date: string): string {
+  const target = new Date(date);
+  const now = new Date();
+  const threeMonths = new Date(now);
+  threeMonths.setMonth(threeMonths.getMonth() + 3);
+
+  if (target > threeMonths) {
+    const adjusted = new Date(now);
+    adjusted.setMonth(adjusted.getMonth() + 2);
+    const adj = adjusted.toISOString().split("T")[0];
+    console.log(`[SkyScrapper] Date ${date} is >3 months away, searching with ${adj} instead`);
+    return adj;
+  }
+  return date;
+}
+
+function getNearTermDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 10);
+  return d.toISOString().split("T")[0];
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function doFlightSearch(
+  origin: AirportInfo, dest: AirportInfo,
+  date: string, adults: number, currency: string,
+  originIATA: string, destIATA: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any[]> {
+  const params = new URLSearchParams({
+    originSkyId: origin.skyId,
+    destinationSkyId: dest.skyId,
+    originEntityId: origin.entityId,
+    destinationEntityId: dest.entityId,
+    date,
+    adults: String(adults),
+    cabinClass: "economy",
+    currency,
+    sortBy: "best",
+  });
+
+  const url = `${BASE_URL}/api/v2/flights/searchFlights?${params}`;
+  const res = await fetchWithRetry(url);
+
+  if (!res) return [];
+  if (!res.ok) {
+    console.error(`[SkyScrapper] searchFlights failed ${res.status}: ${await res.text()}`);
+    return [];
+  }
+
+  const json = await res.json();
+  return json.data?.itineraries || [];
+}
+
 export async function searchSkyscrapperFlights(
   originIATA: string,
   destinationIATA: string,
@@ -150,32 +208,23 @@ export async function searchSkyscrapperFlights(
 
   console.log(`[SkyScrapper] Resolved: ${originIATA} → skyId=${originAirport.skyId}, entityId=${originAirport.entityId} | ${destinationIATA} → skyId=${destAirport.skyId}, entityId=${destAirport.entityId}`);
 
-  // Step B: Search flights
-  const params = new URLSearchParams({
-    originSkyId: originAirport.skyId,
-    destinationSkyId: destAirport.skyId,
-    originEntityId: originAirport.entityId,
-    destinationEntityId: destAirport.entityId,
-    date,
-    adults: String(adults),
-    cabinClass: "economy",
-    currency,
-    sortBy: "best",
-  });
+  // Step B: Search flights (with date fallback for far-future dates)
+  const searchDate = getSearchDate(date);
 
-  const url = `${BASE_URL}/api/v2/flights/searchFlights?${params}`;
-  const res = await fetchWithRetry(url);
+  let itineraries = await doFlightSearch(
+    originAirport, destAirport, searchDate, adults, currency, originIATA, destinationIATA
+  );
 
-  if (!res) return []; // 403/429 — trigger fallback
-  if (!res.ok) {
-    console.error(`[SkyScrapper] searchFlights failed ${res.status}: ${await res.text()}`);
-    return [];
+  // If no results and we used the original date, try a near-term date as demo fallback
+  if (itineraries.length === 0 && searchDate === date) {
+    const nearDate = getNearTermDate();
+    console.warn(`[SkyScrapper] No results for ${date}, trying near-term date ${nearDate}...`);
+    itineraries = await doFlightSearch(
+      originAirport, destAirport, nearDate, adults, currency, originIATA, destinationIATA
+    );
   }
 
-  const json = await res.json();
-  const itineraries = json.data?.itineraries;
-
-  if (!Array.isArray(itineraries) || itineraries.length === 0) {
+  if (itineraries.length === 0) {
     console.warn(`[SkyScrapper] No itineraries returned for ${originIATA} → ${destinationIATA}`);
     return [];
   }

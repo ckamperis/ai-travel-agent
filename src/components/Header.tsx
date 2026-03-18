@@ -17,7 +17,7 @@ export default function Header() {
   const [notifsOpen, setNotifsOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const notifsRef = useRef<HTMLDivElement>(null);
-  const [profile, setProfile] = useState({ agencyName: 'Afea Travel', agentName: 'Maria', email: '' });
+  const [profile, setProfile] = useState({ agencyName: '', agentName: '', email: '' });
 
   useEffect(() => { setProfile(loadProfile()); }, []);
 
@@ -84,7 +84,7 @@ export default function Header() {
             style={{ color: 'var(--color-text-muted)' }}>
             <Bell size={18} />
             <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white"
-              style={{ background: 'var(--color-red)' }}>3</span>
+              style={{ background: '#EF4444', boxShadow: '0 0 0 2px var(--color-surface)' }}>3</span>
           </button>
           {notifsOpen && (
             <div className="absolute right-0 top-full mt-2 w-80 card shadow-lg animate-scale-in overflow-hidden" style={{ zIndex: 50 }}>
