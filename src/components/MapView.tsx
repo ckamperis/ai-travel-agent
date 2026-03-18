@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
-import { APIProvider, Map, Marker } from '@vis.gl/react-google-maps';
+import { useMemo, useEffect, useRef } from 'react';
+import { APIProvider, Map, useMap } from '@vis.gl/react-google-maps';
 
 interface Location {
   lat: number;
@@ -15,6 +15,45 @@ interface MapViewProps {
   selectedIndex?: number;
   onSelect?: (index: number) => void;
   height?: number;
+}
+
+function MapMarkers({ locations, selectedIndex, onSelect }: {
+  locations: Location[];
+  selectedIndex?: number;
+  onSelect?: (index: number) => void;
+}) {
+  const map = useMap();
+  const markersRef = useRef<google.maps.Marker[]>([]);
+
+  useEffect(() => {
+    if (!map) return;
+
+    // Clear old markers
+    markersRef.current.forEach(m => m.setMap(null));
+
+    // Create new markers
+    const newMarkers = locations.map((loc, i) => {
+      const isSelected = i === selectedIndex;
+      const marker = new google.maps.Marker({
+        position: { lat: loc.lat, lng: loc.lng },
+        map,
+        title: loc.label,
+        icon: isSelected ? undefined : {
+          url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png'
+        }
+      });
+      marker.addListener('click', () => onSelect?.(i));
+      return marker;
+    });
+
+    markersRef.current = newMarkers;
+
+    return () => {
+      newMarkers.forEach(m => m.setMap(null));
+    };
+  }, [map, locations, selectedIndex, onSelect]);
+
+  return null;
 }
 
 export default function MapView({ locations, selectedIndex, onSelect, height = 300 }: MapViewProps) {
@@ -47,22 +86,11 @@ export default function MapView({ locations, selectedIndex, onSelect, height = 3
           zoomControl
           style={{ width: '100%', height: '100%' }}
         >
-          {locations.map((loc, i) => {
-            const isSelected = i === selectedIndex;
-            return (
-              <Marker
-                key={i}
-                position={{ lat: loc.lat, lng: loc.lng }}
-                title={loc.label}
-                onClick={() => onSelect?.(i)}
-                icon={isSelected ? undefined : {
-                  url: `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="36" viewBox="0 0 24 36"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 24 12 24s12-15 12-24C24 5.4 18.6 0 12 0z" fill="${loc.color || '#6B7280'}"/><circle cx="12" cy="12" r="5" fill="white"/></svg>`)}`,
-                  scaledSize: { width: 24, height: 36, equals: () => false },
-                  anchor: { x: 12, y: 36, equals: () => false },
-                }}
-              />
-            );
-          })}
+          <MapMarkers
+            locations={locations}
+            selectedIndex={selectedIndex}
+            onSelect={onSelect}
+          />
         </Map>
       </APIProvider>
     </div>
