@@ -22,6 +22,7 @@ export interface EmailAnalysis {
   language: string;
   specialRequests: string[];
   customerName?: string;
+  legs?: LegAnalysis[];
 }
 
 export interface FlightResult {
@@ -60,6 +61,14 @@ export interface PlaceResult {
   mapsUrl: string;
   lat?: number;
   lng?: number;
+}
+
+export interface LegAnalysis {
+  destination: string;
+  destinationIATA: string;
+  nights: number;
+  budget: { min: number; max: number; currency: string };
+  interests: string[];
 }
 
 export interface AllAgentResults {
