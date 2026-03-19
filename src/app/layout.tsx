@@ -4,6 +4,7 @@ import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import { ToastProvider } from "@/components/Toast";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import AuthProvider from "@/components/AuthProvider";
 
 export const metadata: Metadata = {
   title: "TravelAgent AI | Smart Email Assistant for Travel Agencies",
@@ -18,6 +19,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen antialiased">
+        <AuthProvider>
         <ThemeProvider>
           <ToastProvider>
             <div className="flex h-screen overflow-hidden">
@@ -32,6 +34,7 @@ export default function RootLayout({
             </div>
           </ToastProvider>
         </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   );

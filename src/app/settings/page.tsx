@@ -11,6 +11,9 @@ import {
   Brain,
   RefreshCw,
   Users,
+  Mail,
+  CheckCircle,
+  LogOut,
 } from 'lucide-react';
 import {
   loadSettings,
@@ -19,6 +22,7 @@ import {
   type AppSettings,
 } from '@/lib/settings';
 import { useToast } from '@/components/Toast';
+import { useSession, signIn, signOut } from 'next-auth/react';
 
 const TONES: { value: AppSettings['tone']; label: string }[] = [
   { value: 'formal', label: 'Formal' },
@@ -31,6 +35,7 @@ const inputClass = 'w-full rounded-lg border px-4 py-2.5 text-sm outline-none tr
 
 export default function SettingsPage() {
   const { addToast } = useToast();
+  const { data: session, status: authStatus } = useSession();
   const [settings, setSettings] = useState<AppSettings | null>(null);
 
   useEffect(() => {
@@ -77,6 +82,71 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-8">
+        {/* -- Email Integration --------------------------------- */}
+        <section className="glass-card p-6">
+          <div className="flex items-center gap-2 mb-5">
+            <Mail size={16} style={{ color: 'var(--color-primary)' }} />
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
+              Email Integration
+            </h2>
+          </div>
+
+          {authStatus === 'loading' && (
+            <div className="flex items-center gap-3 py-4" style={{ color: 'var(--color-text-muted)' }}>
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              <span className="text-sm">Checking connection...</span>
+            </div>
+          )}
+
+          {authStatus === 'unauthenticated' && (
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => signIn('google')}
+                className="inline-flex items-center gap-2.5 rounded-lg px-5 py-2.5 text-sm font-medium transition-all hover:brightness-95 active:scale-[0.97] cursor-pointer"
+                style={{ background: '#4285F4', color: '#fff' }}
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#fff"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#fff" opacity=".7"/></svg>
+                Connect Gmail
+              </button>
+              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                Connect your Gmail to process real customer emails
+              </span>
+            </div>
+          )}
+
+          {authStatus === 'authenticated' && session?.user && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full" style={{ background: session.error ? 'var(--color-red)' : 'var(--color-green)' }} />
+                    <span className="text-xs" style={{ color: session.error ? 'var(--color-red)' : 'var(--color-green)' }}>
+                      {session.error ? 'Token expired' : 'Connected'}
+                    </span>
+                  </span>
+                  {session.user.image && (
+                    <img src={session.user.image} alt="" className="h-6 w-6 rounded-full" />
+                  )}
+                  <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                    {session.user.email}
+                  </span>
+                </div>
+                <button
+                  onClick={() => signOut()}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer"
+                  style={{ color: 'var(--color-red)', background: 'var(--color-red-light)' }}
+                >
+                  <LogOut size={12} />
+                  Disconnect
+                </button>
+              </div>
+              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                Gmail read-only access. Your emails are processed locally — only selected emails are sent to AI for analysis.
+              </p>
+            </div>
+          )}
+        </section>
+
         {/* -- Language & Tone ----------------------------------- */}
         <section className="glass-card p-6">
           <div className="flex items-center gap-2 mb-5">

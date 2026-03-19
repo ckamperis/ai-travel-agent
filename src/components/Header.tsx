@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import { loadProfile } from '@/lib/settings';
+import { useSession } from 'next-auth/react';
 
 export default function Header() {
   const pathname = usePathname();
@@ -17,6 +18,7 @@ export default function Header() {
   const [notifsOpen, setNotifsOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const notifsRef = useRef<HTMLDivElement>(null);
+  const { data: session } = useSession();
   const [profile, setProfile] = useState({ agencyName: '', agentName: '', email: '' });
 
   useEffect(() => { setProfile(loadProfile()); }, []);
@@ -39,9 +41,12 @@ export default function Header() {
         href: i < arr.length - 1 ? '/' + arr.slice(0, i + 1).join('/') : undefined,
       }));
 
-  const initials = profile.agentName
-    ? profile.agentName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  const displayName = session?.user?.name || profile.agentName || '';
+  const displayEmail = session?.user?.email || profile.email || profile.agencyName;
+  const initials = displayName
+    ? displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     : 'AT';
+  const avatarUrl = session?.user?.image;
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center border-b px-4 lg:px-6"
@@ -113,15 +118,15 @@ export default function Header() {
         {/* Profile */}
         <div ref={profileRef} className="relative">
           <button onClick={() => { setProfileOpen(!profileOpen); setNotifsOpen(false); }}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white cursor-pointer"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white cursor-pointer overflow-hidden"
             style={{ background: 'var(--color-primary)' }}>
-            {initials}
+            {avatarUrl ? <img src={avatarUrl} alt="" className="h-8 w-8 rounded-full" /> : initials}
           </button>
           {profileOpen && (
             <div className="absolute right-0 top-full mt-2 w-56 card shadow-lg animate-scale-in overflow-hidden" style={{ zIndex: 50 }}>
               <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
-                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{profile.agentName}</p>
-                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{profile.email || profile.agencyName}</p>
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{displayName || 'Agent'}</p>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{displayEmail}</p>
               </div>
               {[
                 { label: 'Profile & Account', icon: User, href: '/profile' },

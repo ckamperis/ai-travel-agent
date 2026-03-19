@@ -6,8 +6,10 @@ import {
   Copy, Check, Clock, ArrowRight, ArrowLeft, Radio,
   Send, PenTool, Mail, RotateCcw, ChevronDown, X, Plus,
   BarChart3, Eye, Languages, CalendarPlus,
-  Save, RefreshCw, Trash2,
+  Save, RefreshCw, Trash2, Inbox as InboxIcon,
 } from 'lucide-react';
+import { useSession, signIn } from 'next-auth/react';
+import type { GmailEmail } from '@/lib/gmail';
 import type { EmailAnalysis, FlightResult, HotelResult, PlaceResult, LegAnalysis } from '@/agents/types';
 import Breadcrumb from '@/components/Breadcrumb';
 import { useToast } from '@/components/Toast';
@@ -145,9 +147,40 @@ function LiveBadge({ source }: { source?: 'live' | 'ai' | 'mock' }) {
 
 export default function InboxPage() {
   const { addToast } = useToast();
+  const { data: session } = useSession();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   useEffect(() => { setSettings(loadSettings()); setProfile(loadProfile()); setProcessedSampleIds(getProcessedSampleIds()); }, []);
+
+  // Gmail state
+  const [gmailEmails, setGmailEmails] = useState<GmailEmail[]>([]);
+  const [gmailLoading, setGmailLoading] = useState(false);
+  const [gmailError, setGmailError] = useState<string | null>(null);
+
+  const fetchGmailEmails = useCallback(async (refresh?: boolean) => {
+    setGmailLoading(true);
+    setGmailError(null);
+    try {
+      const res = await fetch(`/api/gmail${refresh ? '?refresh=1' : ''}`);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to fetch');
+      }
+      const data = await res.json();
+      setGmailEmails(data.emails || []);
+    } catch (err) {
+      setGmailError(err instanceof Error ? err.message : 'Failed to load Gmail');
+    } finally {
+      setGmailLoading(false);
+    }
+  }, []);
+
+  // Fetch Gmail emails on mount when session exists
+  useEffect(() => {
+    if (session?.accessToken) {
+      fetchGmailEmails();
+    }
+  }, [session?.accessToken, fetchGmailEmails]);
 
   const [step, setStep] = useState<Step>(1);
   const [emailText, setEmailText] = useState('');
@@ -507,6 +540,82 @@ export default function InboxPage() {
         <div className="animate-fade-in">
           <h1 className="text-2xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>Inbox</h1>
           <p className="text-sm mb-8" style={{ color: 'var(--color-text-secondary)' }}>Select a customer email or paste your own</p>
+
+          {/* ---- Gmail Inbox Section ---- */}
+          {session?.accessToken ? (
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <InboxIcon size={15} style={{ color: '#4285F4' }} />
+                  <span className="text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>Gmail Inbox</span>
+                  <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider" style={{ background: '#4285F420', color: '#4285F4' }}>Live</span>
+                </div>
+                <button onClick={() => fetchGmailEmails(true)} disabled={gmailLoading}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors disabled:opacity-50"
+                  style={{ color: 'var(--color-primary)', background: 'var(--color-primary-light)' }}>
+                  <RefreshCw size={12} className={gmailLoading ? 'animate-spin' : ''} />
+                  {gmailLoading ? 'Syncing...' : 'Refresh'}
+                </button>
+              </div>
+
+              {gmailError && (
+                <div className="glass-card px-4 py-3 mb-3 text-sm" style={{ color: 'var(--color-red)', borderColor: 'var(--color-red)' }}>
+                  {gmailError}
+                </div>
+              )}
+
+              {gmailLoading && gmailEmails.length === 0 && (
+                <div className="space-y-2 mb-3">
+                  {[1,2,3].map(i => <div key={i} className="glass-card p-4 animate-pulse"><div className="flex items-center gap-4"><div className="h-10 w-10 rounded-full" style={{ background: 'var(--color-border)' }} /><div className="flex-1"><div className="h-3 w-40 rounded mb-2" style={{ background: 'var(--color-border)' }} /><div className="h-3 w-64 rounded" style={{ background: 'var(--color-border)' }} /></div></div></div>)}
+                </div>
+              )}
+
+              {gmailEmails.length > 0 && (
+                <div className="space-y-2 mb-3">
+                  {gmailEmails.map(email => (
+                    <button key={email.id} onClick={() => analyzeEmail(email.body, undefined, email.from)}
+                      className="w-full glass-card flex items-center gap-4 px-5 py-4 text-left transition-all cursor-pointer group"
+                      style={{ borderColor: 'var(--color-border)' }}>
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full" style={{ background: '#4285F420', color: '#4285F4' }}><Mail size={18} /></div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{email.from.replace(/<[^>]+>/, '').trim()}</span>
+                          <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider" style={{ background: '#4285F420', color: '#4285F4' }}>Gmail</span>
+                        </div>
+                        <p className="text-sm font-medium mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>{email.subject}</p>
+                        <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-text-muted)' }}>{email.snippet}</p>
+                      </div>
+                      <ArrowRight size={16} style={{ color: 'var(--color-text-muted)' }} />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {!gmailLoading && gmailEmails.length === 0 && !gmailError && (
+                <div className="glass-card px-4 py-6 text-center mb-3" style={{ color: 'var(--color-text-muted)' }}>
+                  <p className="text-sm">No travel-related emails found in your inbox</p>
+                  <p className="text-xs mt-1 opacity-70">Only emails classified as travel inquiries are shown</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button onClick={() => signIn('google')}
+              className="w-full glass-card flex items-center gap-4 px-5 py-4 mb-8 text-left transition-all cursor-pointer"
+              style={{ borderColor: 'var(--color-border)', borderStyle: 'dashed' }}>
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full" style={{ background: '#4285F420', color: '#4285F4' }}><Mail size={18} /></div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Connect Gmail to see real emails</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>Sign in with Google to process real customer inquiries</p>
+              </div>
+              <span className="rounded-lg px-3 py-1.5 text-xs font-medium" style={{ background: '#4285F4', color: '#fff' }}>Connect</span>
+            </button>
+          )}
+
+          {/* ---- Sample Emails ---- */}
+          <div className="flex items-center gap-2 mb-3">
+            <Mail size={15} style={{ color: 'var(--color-text-muted)' }} />
+            <span className="text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>Sample Emails</span>
+          </div>
           <div className="space-y-2 mb-6">
             {SAMPLE_EMAILS.filter(e => !processedSampleIds.has(e.id)).map(email => (
               <button key={email.id} onClick={() => analyzeEmail(email.body, email.id, email.from)}
