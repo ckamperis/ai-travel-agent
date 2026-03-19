@@ -14,6 +14,7 @@ import {
   ChevronUp,
   Plus,
   Info,
+  Link2,
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 
@@ -160,6 +161,20 @@ const INITIAL_AGENTS: AgentDef[] = [
     avgResponseTime: '8.4s',
     lastUsed: '2 hours ago',
     enabled: true,
+  },
+  {
+    id: 'crm-sync',
+    name: 'CRM Sync Agent',
+    description:
+      'Syncs customers and trip data to your external CRM. Supports SoftOne, HubSpot, Salesforce, Zoho, Pipedrive, and custom webhooks.',
+    apiSource: 'CRM API',
+    icon: <Link2 size={20} />,
+    color: '#8B5CF6',
+    statusBg: 'var(--color-text-muted)',
+    statusLabel: 'Configure in Settings',
+    avgResponseTime: '—',
+    lastUsed: 'Never',
+    enabled: false,
   },
 ];
 

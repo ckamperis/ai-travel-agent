@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Settings,
   Save,
@@ -14,6 +14,10 @@ import {
   Mail,
   CheckCircle,
   LogOut,
+  Link2,
+  Loader2,
+  AlertCircle,
+  Zap,
 } from 'lucide-react';
 import {
   loadSettings,
@@ -33,14 +37,92 @@ const TONES: { value: AppSettings['tone']; label: string }[] = [
 /* Shared input styles */
 const inputClass = 'w-full rounded-lg border px-4 py-2.5 text-sm outline-none transition-colors';
 
+/* ── CRM config types & storage ───────────────────────────── */
+
+interface CRMConfig {
+  provider: string;
+  settings: Record<string, string>;
+  syncMode: 'manual' | 'auto' | 'realtime';
+  syncCustomers: boolean;
+  syncTrips: boolean;
+  syncRevenue: boolean;
+  lastSynced: string | null;
+}
+
+const CRM_STORAGE_KEY = 'ta-crm-config';
+const DEFAULT_CRM: CRMConfig = {
+  provider: '', settings: {}, syncMode: 'manual',
+  syncCustomers: true, syncTrips: true, syncRevenue: false, lastSynced: null,
+};
+
+function loadCrmConfig(): CRMConfig {
+  if (typeof window === 'undefined') return DEFAULT_CRM;
+  try { const s = localStorage.getItem(CRM_STORAGE_KEY); if (s) return { ...DEFAULT_CRM, ...JSON.parse(s) }; } catch { /* */ }
+  return { ...DEFAULT_CRM };
+}
+function saveCrmConfig(c: CRMConfig) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(CRM_STORAGE_KEY, JSON.stringify(c));
+}
+
+const CRM_PROVIDERS = [
+  { value: 'softone', label: 'SoftOne ERP', fields: [{ key: 'baseUrl', label: 'API URL', placeholder: 'https://softone.example.com/api' }, { key: 'appId', label: 'App ID', placeholder: 'Your SoftOne App ID' }, { key: 'token', label: 'Token', placeholder: 'Bearer token', secret: true }] },
+  { value: 'entersoft', label: 'Entersoft', fields: [{ key: 'baseUrl', label: 'API URL', placeholder: 'https://es.example.com/api' }, { key: 'apiKey', label: 'API Key', placeholder: 'Your API key', secret: true }] },
+  { value: 'hubspot', label: 'HubSpot', fields: [{ key: 'apiKey', label: 'API Key', placeholder: 'pat-xxx', secret: true }] },
+  { value: 'salesforce', label: 'Salesforce', fields: [{ key: 'baseUrl', label: 'Instance URL', placeholder: 'https://yourorg.salesforce.com' }, { key: 'apiKey', label: 'Access Token', placeholder: 'Your access token', secret: true }] },
+  { value: 'zoho', label: 'Zoho CRM', fields: [{ key: 'baseUrl', label: 'API URL', placeholder: 'https://www.zohoapis.com' }, { key: 'apiKey', label: 'API Key', placeholder: 'Your API key', secret: true }] },
+  { value: 'pipedrive', label: 'Pipedrive', fields: [{ key: 'apiKey', label: 'API Token', placeholder: 'Your Pipedrive API token', secret: true }] },
+  { value: 'webhook', label: 'Custom Webhook', fields: [{ key: 'url', label: 'Webhook URL', placeholder: 'https://your-service.com/webhook' }, { key: 'headers', label: 'Headers (key: value, one per line)', placeholder: 'Authorization: Bearer xxx', multiline: true }] },
+] as const;
+
 export default function SettingsPage() {
   const { addToast } = useToast();
   const { data: session, status: authStatus } = useSession();
   const [settings, setSettings] = useState<AppSettings | null>(null);
 
+  // CRM state
+  const [crm, setCrm] = useState<CRMConfig>(DEFAULT_CRM);
+  const [crmTestStatus, setCrmTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
+  const [crmTestMsg, setCrmTestMsg] = useState('');
+
   useEffect(() => {
     setSettings(loadSettings());
+    setCrm(loadCrmConfig());
   }, []);
+
+  const updateCrm = useCallback(<K extends keyof CRMConfig>(key: K, value: CRMConfig[K]) => {
+    setCrm(prev => {
+      const next = { ...prev, [key]: value };
+      saveCrmConfig(next);
+      return next;
+    });
+  }, []);
+
+  const updateCrmSetting = useCallback((key: string, value: string) => {
+    setCrm(prev => {
+      const next = { ...prev, settings: { ...prev.settings, [key]: value } };
+      saveCrmConfig(next);
+      return next;
+    });
+  }, []);
+
+  const testCrmConnection = useCallback(async () => {
+    setCrmTestStatus('testing');
+    setCrmTestMsg('');
+    try {
+      const res = await fetch('/api/crm/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: crm.provider, settings: crm.settings }),
+      });
+      const data = await res.json();
+      setCrmTestStatus(data.ok ? 'ok' : 'error');
+      setCrmTestMsg(data.message || (data.ok ? 'Connected' : 'Failed'));
+    } catch {
+      setCrmTestStatus('error');
+      setCrmTestMsg('Connection test failed');
+    }
+  }, [crm.provider, crm.settings]);
 
   if (!settings) return null;
 
@@ -177,6 +259,135 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
+          )}
+        </section>
+
+        {/* -- CRM Integration ----------------------------------- */}
+        <section className="glass-card p-6">
+          <div className="flex items-center gap-2 mb-5">
+            <Link2 size={16} style={{ color: 'var(--color-purple)' }} />
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
+              CRM Integration
+            </h2>
+            {crm.provider && crmTestStatus === 'ok' && (
+              <span className="flex items-center gap-1 text-[10px] font-medium" style={{ color: 'var(--color-green)' }}>
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: 'var(--color-green)' }} /> Connected
+              </span>
+            )}
+          </div>
+
+          {/* Provider dropdown */}
+          <div className="mb-4">
+            <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>Provider</label>
+            <select
+              className={inputClass}
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              value={crm.provider}
+              onChange={e => { updateCrm('provider', e.target.value); updateCrm('settings', {} as Record<string, string>); setCrmTestStatus('idle'); }}
+            >
+              <option value="">Select a CRM...</option>
+              {CRM_PROVIDERS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+          </div>
+
+          {/* Config fields for selected provider */}
+          {crm.provider && (() => {
+            const provider = CRM_PROVIDERS.find(p => p.value === crm.provider);
+            if (!provider) return null;
+            return (
+              <div className="space-y-3 mb-4">
+                {provider.fields.map(f => (
+                  <div key={f.key}>
+                    <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>{f.label}</label>
+                    {'multiline' in f && f.multiline ? (
+                      <textarea
+                        className={`${inputClass} min-h-[60px] resize-none`}
+                        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                        placeholder={f.placeholder}
+                        value={crm.settings[f.key] || ''}
+                        onChange={e => updateCrmSetting(f.key, e.target.value)}
+                        rows={3}
+                      />
+                    ) : (
+                      <input
+                        type={'secret' in f && f.secret ? 'password' : 'text'}
+                        className={inputClass}
+                        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                        placeholder={f.placeholder}
+                        value={crm.settings[f.key] || ''}
+                        onChange={e => updateCrmSetting(f.key, e.target.value)}
+                      />
+                    )}
+                  </div>
+                ))}
+
+                {/* Test Connection + Status */}
+                <div className="flex items-center gap-3 pt-1">
+                  <button onClick={testCrmConnection} disabled={crmTestStatus === 'testing'}
+                    className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-medium transition-all cursor-pointer disabled:opacity-50"
+                    style={{ background: 'var(--color-purple-light)', color: 'var(--color-purple)' }}>
+                    {crmTestStatus === 'testing' ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+                    Test Connection
+                  </button>
+                  {crmTestStatus === 'ok' && <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-green)' }}><CheckCircle size={12} /> {crmTestMsg}</span>}
+                  {crmTestStatus === 'error' && <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-red)' }}><AlertCircle size={12} /> {crmTestMsg}</span>}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Sync options (shown when provider selected) */}
+          {crm.provider && (
+            <div className="space-y-4 pt-4" style={{ borderTop: '1px solid var(--color-border)' }}>
+              {/* Sync mode */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>Sync Mode</label>
+                <div className="flex gap-2">
+                  {(['manual', 'auto', 'realtime'] as const).map(mode => (
+                    <button key={mode} onClick={() => updateCrm('syncMode', mode)}
+                      className="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer"
+                      style={{ background: crm.syncMode === mode ? 'var(--color-purple-light)' : 'var(--color-bg-secondary)', color: crm.syncMode === mode ? 'var(--color-purple)' : 'var(--color-text-muted)' }}>
+                      {mode === 'manual' ? 'Manual' : mode === 'auto' ? 'Auto' : 'Real-time'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* What to sync */}
+              <div>
+                <label className="mb-2 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>What to sync</label>
+                <div className="flex flex-wrap gap-3">
+                  {[
+                    { key: 'syncCustomers' as const, label: 'Customers' },
+                    { key: 'syncTrips' as const, label: 'Trips' },
+                    { key: 'syncRevenue' as const, label: 'Revenue' },
+                  ].map(item => (
+                    <label key={item.key} className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={crm[item.key]} onChange={() => updateCrm(item.key, !crm[item.key])} className="h-4 w-4 rounded" />
+                      <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{item.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sync Now + Last synced */}
+              <div className="flex items-center gap-3">
+                <button onClick={() => addToast('Sync started — this may take a moment', 'info')}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-medium transition-all cursor-pointer"
+                  style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
+                  <RefreshCw size={12} /> Sync Now
+                </button>
+                <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+                  {crm.lastSynced ? `Last synced: ${new Date(crm.lastSynced).toLocaleString()}` : 'Never synced'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {!crm.provider && (
+            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Connect your CRM to automatically sync customers and trip data. Supports SoftOne, HubSpot, Salesforce, and more.
+            </p>
           )}
         </section>
 
