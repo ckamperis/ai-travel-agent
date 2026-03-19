@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckSquare, Inbox, CheckCircle, AlertCircle, Clock, X, Mail, MapPin, Timer } from 'lucide-react';
+import { CheckSquare, Inbox, CheckCircle, AlertCircle, Clock, X, Mail, MapPin, Timer, ArrowDownLeft, ArrowUpRight, MessageSquare } from 'lucide-react';
 import { loadHistory, type ProcessedEmail } from '@/lib/settings';
 import * as db from '@/lib/db';
 
@@ -19,9 +19,29 @@ function fmtDate(iso: string): string {
   }
 }
 
+const TRIP_STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
+  new: { label: 'New', color: 'var(--color-text-muted)', bg: 'var(--color-bg-secondary)' },
+  analyzing: { label: 'Analyzing', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' },
+  quoted: { label: 'Quoted', color: 'var(--color-green)', bg: 'var(--color-green-light)' },
+  negotiating: { label: 'Negotiating', color: 'var(--color-amber)', bg: 'var(--color-amber-light)' },
+  confirmed: { label: 'Confirmed', color: 'var(--color-green)', bg: 'var(--color-green-light)' },
+  booked: { label: 'Booked', color: '#8B5CF6', bg: '#8B5CF620' },
+  completed: { label: 'Completed', color: 'var(--color-green)', bg: 'var(--color-green-light)' },
+  cancelled: { label: 'Cancelled', color: 'var(--color-red)', bg: 'var(--color-red-light)' },
+};
+
+interface ConversationMessage {
+  direction: 'inbound' | 'outbound';
+  from: string;
+  subject: string;
+  body: string;
+  timestamp: string;
+}
+
 export default function ProcessedPage() {
   const [history, setHistory] = useState<ProcessedEmail[]>([]);
   const [selected, setSelected] = useState<ProcessedEmail | null>(null);
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -41,6 +61,7 @@ export default function ProcessedPage() {
             composedResponse: v?.composed_email || '',
             customerEmail: t.customers?.email,
             customerName: t.customers?.name,
+            tripStatus: t.status,
           };
         }));
       } else {
@@ -107,7 +128,27 @@ export default function ProcessedPage() {
               {history.map((entry) => (
                 <tr
                   key={entry.id}
-                  onClick={() => setSelected(entry)}
+                  onClick={async () => {
+                    setSelected(entry);
+                    // Try loading conversation messages from Supabase
+                    setMessages([]);
+                    try {
+                      const convs = await db.getConversations();
+                      const conv = convs?.find(c => c.subject?.includes(entry.destination));
+                      if (conv) {
+                        const msgs = await db.getMessages(conv.id);
+                        if (msgs) {
+                          setMessages(msgs.map(m => ({
+                            direction: m.direction as 'inbound' | 'outbound',
+                            from: m.from_email,
+                            subject: m.subject,
+                            body: m.body_text,
+                            timestamp: m.created_at,
+                          })));
+                        }
+                      }
+                    } catch { /* fallback: no messages */ }
+                  }}
                   className="transition-colors duration-150 cursor-pointer"
                   style={{ borderBottom: '1px solid color-mix(in srgb, var(--color-border) 40%, transparent)' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-hover)')}
@@ -152,23 +193,25 @@ export default function ProcessedPage() {
 
                   {/* Status */}
                   <td className="px-5 py-3.5 text-right">
-                    {entry.status === 'completed' ? (
-                      <span
-                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
-                        style={{ background: 'var(--color-green-light)', color: 'var(--color-green)' }}
-                      >
-                        <CheckCircle size={12} />
-                        Completed
-                      </span>
-                    ) : (
-                      <span
-                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
-                        style={{ background: 'var(--color-red-light)', color: 'var(--color-red)' }}
-                      >
-                        <AlertCircle size={12} />
-                        Failed
-                      </span>
-                    )}
+                    <div className="flex items-center justify-end gap-2">
+                      {entry.tripStatus && TRIP_STATUS_LABELS[entry.tripStatus] && (
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                          style={{ background: TRIP_STATUS_LABELS[entry.tripStatus].bg, color: TRIP_STATUS_LABELS[entry.tripStatus].color }}>
+                          {TRIP_STATUS_LABELS[entry.tripStatus].label}
+                        </span>
+                      )}
+                      {entry.status === 'completed' ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
+                          style={{ background: 'var(--color-green-light)', color: 'var(--color-green)' }}>
+                          <CheckCircle size={12} /> Completed
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
+                          style={{ background: 'var(--color-red-light)', color: 'var(--color-red)' }}>
+                          <AlertCircle size={12} /> Failed
+                        </span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -225,10 +268,18 @@ export default function ProcessedPage() {
                     <MapPin size={12} /> {selected.destination}
                   </span>
                 )}
-                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
-                  style={{ background: 'var(--color-green-light)', color: 'var(--color-green)' }}>
-                  <Timer size={12} /> {selected.totalTime}s
-                </span>
+                {selected.tripStatus && TRIP_STATUS_LABELS[selected.tripStatus] && (
+                  <span className="rounded-full px-3 py-1 text-xs font-medium"
+                    style={{ background: TRIP_STATUS_LABELS[selected.tripStatus].bg, color: TRIP_STATUS_LABELS[selected.tripStatus].color }}>
+                    {TRIP_STATUS_LABELS[selected.tripStatus].label}
+                  </span>
+                )}
+                {selected.totalTime > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
+                    style={{ background: 'var(--color-green-light)', color: 'var(--color-green)' }}>
+                    <Timer size={12} /> {selected.totalTime}s
+                  </span>
+                )}
                 <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs"
                   style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-muted)' }}>
                   {fmtDate(selected.processedAt)}
@@ -241,26 +292,62 @@ export default function ProcessedPage() {
                 )}
               </div>
 
-              {/* Composed Response */}
-              {selected.composedResponse ? (
-                <div>
-                  <h4 className="text-xs font-semibold uppercase tracking-wider mb-2"
-                    style={{ color: 'var(--color-text-muted)' }}>
-                    Composed Response
+              {/* Conversation Timeline */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <MessageSquare size={14} style={{ color: 'var(--color-primary)' }} />
+                  <h4 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
+                    Conversation
                   </h4>
-                  <div className="rounded-lg px-5 py-4 text-sm leading-relaxed whitespace-pre-wrap"
-                    style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}>
-                    {selected.composedResponse}
+                </div>
+
+                {messages.length > 0 ? (
+                  <div className="space-y-3">
+                    {messages.map((msg, i) => (
+                      <div key={i} className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+                        <div className="flex items-center gap-2 px-4 py-2" style={{ background: msg.direction === 'inbound' ? 'var(--color-bg-secondary)' : 'var(--color-primary-light)' }}>
+                          {msg.direction === 'inbound' ? <ArrowDownLeft size={12} style={{ color: 'var(--color-text-muted)' }} /> : <ArrowUpRight size={12} style={{ color: 'var(--color-primary)' }} />}
+                          <span className="text-xs font-medium" style={{ color: msg.direction === 'inbound' ? 'var(--color-text-secondary)' : 'var(--color-primary)' }}>
+                            {msg.direction === 'inbound' ? 'Customer' : 'Agent'}: {msg.from}
+                          </span>
+                          <span className="ml-auto text-[10px]" style={{ color: 'var(--color-text-muted)' }}>{fmtDate(msg.timestamp)}</span>
+                        </div>
+                        <div className="px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto" style={{ color: 'var(--color-text-secondary)' }}>
+                          {msg.body.slice(0, 1000)}{msg.body.length > 1000 ? '...' : ''}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              ) : (
-                <div className="rounded-lg px-5 py-8 text-center"
-                  style={{ background: 'var(--color-bg-secondary)' }}>
-                  <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                    No composed response stored for this email
-                  </p>
-                </div>
-              )}
+                ) : selected.composedResponse ? (
+                  /* Fallback: show inbound (if available) + outbound from localStorage */
+                  <div className="space-y-3">
+                    {selected.originalEmail && (
+                      <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+                        <div className="flex items-center gap-2 px-4 py-2" style={{ background: 'var(--color-bg-secondary)' }}>
+                          <ArrowDownLeft size={12} style={{ color: 'var(--color-text-muted)' }} />
+                          <span className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>Customer: {selected.customerEmail || selected.from}</span>
+                        </div>
+                        <div className="px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto" style={{ color: 'var(--color-text-secondary)' }}>
+                          {selected.originalEmail.slice(0, 1000)}
+                        </div>
+                      </div>
+                    )}
+                    <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+                      <div className="flex items-center gap-2 px-4 py-2" style={{ background: 'var(--color-primary-light)' }}>
+                        <ArrowUpRight size={12} style={{ color: 'var(--color-primary)' }} />
+                        <span className="text-xs font-medium" style={{ color: 'var(--color-primary)' }}>Agent Response</span>
+                      </div>
+                      <div className="px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap max-h-[300px] overflow-y-auto" style={{ color: 'var(--color-text-secondary)' }}>
+                        {selected.composedResponse}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg px-5 py-8 text-center" style={{ background: 'var(--color-bg-secondary)' }}>
+                    <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No conversation data available</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

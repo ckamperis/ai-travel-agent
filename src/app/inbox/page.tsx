@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useSession, signIn } from 'next-auth/react';
 import type { GmailEmail } from '@/lib/gmail';
+import { ExternalLink } from 'lucide-react';
 import type { EmailAnalysis, FlightResult, HotelResult, PlaceResult, LegAnalysis } from '@/agents/types';
 import Breadcrumb from '@/components/Breadcrumb';
 import { useToast } from '@/components/Toast';
@@ -477,6 +478,8 @@ export default function InboxPage() {
         status: text.length > 50 ? 'completed' : 'failed',
         composedResponse: text, customerEmail, customerName,
         sampleEmailId: currentSampleId || undefined,
+        tripStatus: 'quoted',
+        originalEmail: emailText,
       });
       if (currentSampleId) setProcessedSampleIds(prev => new Set([...prev, currentSampleId]));
       if (customerEmail) {
@@ -601,6 +604,49 @@ export default function InboxPage() {
     addToast(`Follow-up scheduled for ${days} days from now`, 'success');
     setShowFollowUpForm(false);
   }, [analysis, emailText, composedEmail, settings, currentSampleFrom, addToast]);
+
+  /* ---- Open Gmail compose (human-in-the-loop) ---- */
+  const openGmailCompose = useCallback(() => {
+    const to = currentSampleFrom || extractEmail(emailText) || '';
+    const subject = analysis ? `Re: Trip to ${analysis.destination}` : '';
+    const body = composedEmail;
+    const params = new URLSearchParams({ view: 'cm', to, su: subject, body });
+    window.open(`https://mail.google.com/mail/?${params.toString()}`, '_blank');
+    addToast('Gmail compose opened — review and send', 'success');
+  }, [currentSampleFrom, emailText, analysis, composedEmail, addToast]);
+
+  /* ---- Send handler (marks as sent + auto follow-up) ---- */
+  const handleSend = useCallback(() => {
+    addToast('Email sent! (simulated)', 'success');
+
+    // Auto follow-up if enabled
+    if (settings?.autoFollowUp && analysis) {
+      const days = settings.followUpDays || 3;
+      const scheduled = new Date(); scheduled.setDate(scheduled.getDate() + days);
+      addFollowUp({
+        customerEmail: currentSampleFrom || extractEmail(emailText),
+        customerName: analysis.customerName || currentSampleFrom || extractEmail(emailText),
+        destination: analysis.destination, originalResponse: composedEmail,
+        scheduledDate: scheduled.toISOString(), status: 'pending',
+        processedEmailId: Date.now().toString(),
+      });
+
+      // Supabase follow-up (fire-and-forget)
+      (async () => {
+        try {
+          const email = currentSampleFrom || extractEmail(emailText);
+          if (!email) return;
+          const customer = await db.getCustomerByEmail(email);
+          if (!customer) return;
+          await db.createFollowUp({
+            customer_id: customer.id,
+            scheduled_date: scheduled.toISOString().split('T')[0],
+            reminder_text: `Follow up on trip to ${analysis.destination}`,
+          });
+        } catch { /* non-critical */ }
+      })();
+    }
+  }, [analysis, composedEmail, emailText, currentSampleFrom, settings, addToast]);
 
   const handleReset = useCallback(() => {
     setStep(1); setEmailText(''); setShowPaste(false); setAnalysis(null); setEdited(null);
@@ -1041,7 +1087,10 @@ export default function InboxPage() {
               {/* Action buttons */}
               {!isStreaming && (
                 <div className="flex flex-wrap gap-3 mt-4">
-                  <button onClick={() => { addToast('Email sent! (simulated)', 'success'); }} className="inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-semibold transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer" style={{ background: 'var(--color-primary)', color: '#fff' }}><Send size={15} /> Send</button>
+                  <button onClick={handleSend} className="inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-semibold transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer" style={{ background: 'var(--color-primary)', color: '#fff' }}><Send size={15} /> Send</button>
+                  {session?.accessToken && (
+                    <button onClick={openGmailCompose} className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all hover:brightness-95 active:scale-[0.97] cursor-pointer" style={{ background: '#4285F4', color: '#fff' }}><ExternalLink size={14} /> Open in Gmail</button>
+                  )}
                   <button onClick={() => addToast('Draft saved', 'success')} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm cursor-pointer transition-all" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}><Save size={14} /> Save Draft</button>
                   <button onClick={copyEmail} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm cursor-pointer transition-all" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}><Copy size={14} /> Copy Plain Text</button>
 

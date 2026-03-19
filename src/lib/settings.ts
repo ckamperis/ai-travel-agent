@@ -173,6 +173,8 @@ export interface ProcessedEmail {
   customerEmail?: string;
   customerName?: string;
   sampleEmailId?: string;
+  tripStatus?: string; // Supabase trip status: new, quoted, negotiating, confirmed, etc.
+  originalEmail?: string; // The inbound customer email text
 }
 
 export function loadHistory(): ProcessedEmail[] {
