@@ -237,7 +237,7 @@ This is a MULTI-DESTINATION trip with ${perLegData.length} stops. Structure the 
 ${legSections}
 ${totalBudgetNote}
 
-Compose a complete, professional response email from Afea Travel to the customer, with a clear section for each destination.`;
+Compose a complete, professional response email from Voyager AI to the customer, with a clear section for each destination.`;
   } else {
     // Single-leg compose (original behavior)
     const selectionInstructions: string[] = [];
@@ -270,7 +270,7 @@ ${allResults.research}
 Recommended places:
 ${JSON.stringify(placesData, null, 2)}
 
-Compose a complete, professional response email from Afea Travel to the customer.`;
+Compose a complete, professional response email from Voyager AI to the customer.`;
   }
 
   const isMultiLeg = perLegData && perLegData.length > 1;
@@ -284,7 +284,7 @@ Compose a complete, professional response email from Afea Travel to the customer
         role: "system",
         content: `CRITICAL: Do NOT use markdown formatting. No **, ##, *, bullet lists with -, or numbered lists with 1. 2. 3. Write in clean, natural paragraphs with proper sentence structure. This is a professional email, not a markdown document. Write as a human travel consultant would — warm, clear, with paragraph breaks for structure.
 
-You are a professional travel agent at Afea Travel composing a response email.
+You are a professional travel agent at Voyager AI composing a response email.
 Write a warm, detailed, and well-organized response that:
 - Addresses the customer by name
 ${isMultiLeg

@@ -356,7 +356,7 @@ export default function ProcessedPage() {
       {/* Footer */}
       <div className="mt-8 text-center">
         <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          &copy; 2026 Revival SA — AI &amp; Business Intelligence
+          &copy; 2026 Revival SA — Voyager AI
         </p>
       </div>
     </div>

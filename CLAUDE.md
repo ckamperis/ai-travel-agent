@@ -1,4 +1,4 @@
-# TravelAgent AI — SaaS Email Assistant for Travel Agencies
+# Voyager AI — Smart Lead Response for Travel Agencies
 
 ## Product Overview
 A product-ready AI-powered email assistant that handles travel inquiries. Multiple AI agents collaborate to analyze customer emails, search flights/hotels/places, research itineraries, and compose professional responses — all in real-time.

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Inbox, CheckSquare, CalendarClock, Users,
-  Settings, Bot, FileText, User, Menu, X, Zap, PanelLeftClose, PanelLeft,
+  Settings, Bot, FileText, User, Menu, X, Compass, PanelLeftClose, PanelLeft,
 } from 'lucide-react';
 import { loadFollowUps, getProcessedSampleIds } from '@/lib/settings';
 
@@ -52,9 +52,9 @@ export default function Sidebar() {
         {/* Logo */}
         <div className="flex items-center gap-2.5 border-b px-4 py-3.5" style={{ borderColor: 'var(--color-border)' }}>
           <div className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0" style={{ background: 'var(--color-primary-light)' }}>
-            <Zap size={16} style={{ color: 'var(--color-primary)' }} />
+            <Compass size={16} style={{ color: 'var(--color-primary)' }} />
           </div>
-          {!collapsed && <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>TravelAgent AI</span>}
+          {!collapsed && <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>Voyager <span style={{ color: 'var(--color-primary)' }}>AI</span></span>}
         </div>
 
         {/* Nav */}
@@ -95,7 +95,7 @@ export default function Sidebar() {
           </button>
           {!collapsed && (
             <p className="mt-2 px-3 text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
-              &copy; 2026 Revival SA
+              &copy; 2026 Revival SA — Voyager AI
             </p>
           )}
         </div>

@@ -191,7 +191,7 @@ export default function ProfilePage() {
       {/* Footer */}
       <div className="mt-4 text-center pb-4">
         <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          &copy; 2026 Revival SA — AI &amp; Business Intelligence
+          &copy; 2026 Revival SA — Voyager AI
         </p>
       </div>
     </div>

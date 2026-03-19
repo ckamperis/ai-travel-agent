@@ -144,7 +144,7 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>Dashboard</h1>
         </div>
         <p className="text-sm ml-12" style={{ color: 'var(--color-text-muted)' }}>
-          Welcome back — here&apos;s your activity overview
+          Voyager AI — Smart Lead Response for Travel Agencies
         </p>
       </div>
 
@@ -258,7 +258,7 @@ export default function DashboardPage() {
 
       <div className="mt-12 text-center">
         <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          &copy; 2026 Revival SA &mdash; AI &amp; Business Intelligence
+          &copy; 2026 Revival SA &mdash; Voyager AI
         </p>
       </div>
     </div>

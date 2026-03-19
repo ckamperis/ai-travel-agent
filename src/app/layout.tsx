@@ -7,8 +7,8 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import AuthProvider from "@/components/AuthProvider";
 
 export const metadata: Metadata = {
-  title: "TravelAgent AI | Smart Email Assistant for Travel Agencies",
-  description: "AI-powered email assistant that handles travel inquiries in seconds",
+  title: "Voyager AI | Smart Travel Proposals",
+  description: "Smart lead response for travel agencies — AI-powered proposals in seconds",
 };
 
 export default function RootLayout({

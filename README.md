@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Voyager AI
+
+### Smart Lead Response for Travel Agencies
+
+Voyager AI helps travel agencies respond to customer inquiries 10x faster with AI-powered proposals.
+
+## What it does
+
+- Reads customer emails and extracts trip details in seconds
+- Searches real flights (Skyscanner) and hotels (Booking.com) automatically
+- Generates professional, multi-destination travel proposals
+- Supports multi-leg trips across any number of countries
+- Classifies incoming Gmail emails as travel inquiries
+- Integrates with CRMs (SoftOne, HubSpot, Salesforce, and more)
+- Full conversation threading with trip revision support
+- Customer CRM with tags, notes, and trip history
+- Follow-up scheduling with AI-generated reminder emails
+- Dark/light mode, responsive design, multi-language support
+
+## Tech Stack
+
+- **Framework:** Next.js 16, TypeScript, Tailwind CSS
+- **AI:** OpenAI GPT-4o (analysis, research, composition, classification)
+- **Database:** Supabase (PostgreSQL)
+- **Auth:** Auth.js v5 (Google OAuth with Gmail API)
+
+## APIs
+
+- **OpenAI** — Email analysis, itinerary research, email composition, Gmail classification
+- **Booking.com** (RapidAPI) — Real hotel search with prices, ratings, coordinates
+- **Sky Scrapper** (RapidAPI) — Real flight search with airlines, times, prices
+- **Google Places** — Restaurant, attraction, and POI discovery
+- **Google Maps** — Interactive maps with hotel and place pins
+- **Gmail API** — Inbox sync, email classification, compose integration
+- **Open-Meteo** — Weather forecasts for travel destinations
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
+cp .env.local.example .env.local
+# Fill in API keys
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Architecture
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+Voyager AI
+├── Next.js 16 App Router (React 19)
+├── 6 AI Agents (Email Analyzer, Flight, Hotel, Research, Places, Composer)
+├── Gmail OAuth2 Integration (read + classify + compose)
+├── Supabase Database (customers, conversations, trips, versions)
+├── CRM Integration Layer (SoftOne, Webhook, HubSpot, Salesforce...)
+└── Real-time SSE Streaming (agent status + email composition)
+```
 
-## Learn More
+## Built by
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Revival SA — AI & Business Intelligence**

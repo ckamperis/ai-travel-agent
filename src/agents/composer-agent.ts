@@ -46,6 +46,6 @@ export async function* composeResponse(
     }
   } catch (error) {
     console.error("Composer agent failed:", error);
-    yield "We apologize, but we encountered an issue composing your travel plan. Our team will follow up shortly with a complete proposal.\n\nBest regards,\nAfea Travel";
+    yield "We apologize, but we encountered an issue composing your travel plan. Our team will follow up shortly with a complete proposal.\n\nBest regards,\nVoyager AI";
   }
 }

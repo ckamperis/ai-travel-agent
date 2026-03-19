@@ -454,7 +454,7 @@ export default function InboxPage() {
       setComposedEmail(text);
       addToast('Response composed — ready to review', 'success');
     } catch {
-      if (!text) { text = 'We apologize, but we encountered an issue composing your travel plan.\n\nBest regards,\nAfea Travel'; setComposedEmail(text); }
+      if (!text) { text = 'We apologize, but we encountered an issue composing your travel plan.\n\nBest regards,\nVoyager AI'; setComposedEmail(text); }
       addToast('Composition failed', 'error');
     } finally {
       setIsStreaming(false);
@@ -1076,7 +1076,7 @@ export default function InboxPage() {
                       from: profile?.email || 'info@afea-travel.com',
                       to: currentSampleFrom || extractEmail(emailText),
                       subject: analysis ? `Re: Trip to ${analysis.destination}` : 'Travel Proposal',
-                      agency: profile?.agencyName || 'Afea Travel',
+                      agency: profile?.agencyName || 'Voyager AI',
                     })}
                     className="w-full min-h-[450px] border-0"
                     title="Email Preview"
@@ -1200,7 +1200,7 @@ export default function InboxPage() {
       )}
 
       <div className="mt-12 pb-4 text-center text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-        © 2026 Revival SA — AI &amp; Business Intelligence
+        © 2026 Revival SA — Voyager AI
       </div>
     </div>
   );

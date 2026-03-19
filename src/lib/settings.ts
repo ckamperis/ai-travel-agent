@@ -30,7 +30,7 @@ export interface AppSettings {
 export const DEFAULT_SETTINGS: AppSettings = {
   responseLanguage: 'en',
   tone: 'professional',
-  emailSignature: 'Best regards,\nYour Travel Team',
+  emailSignature: 'Best regards,\nPowered by Voyager AI\nYour Agency Name',
   defaultGreeting: 'Dear',
   includePriceBreakdown: true,
   includeItinerary: true,

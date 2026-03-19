@@ -54,7 +54,7 @@ export default function Header() {
       {/* Logo (mobile) */}
       <div className="flex items-center gap-2 lg:hidden mr-4">
         <Zap size={18} style={{ color: 'var(--color-primary)' }} />
-        <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>TravelAgent AI</span>
+        <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>Voyager <span style={{ color: 'var(--color-primary)' }}>AI</span></span>
       </div>
 
       {/* Breadcrumb */}
