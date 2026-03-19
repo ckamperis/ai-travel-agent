@@ -1,6 +1,8 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 
+console.log("[Auth] Gmail scopes requested: openid email profile gmail.readonly");
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Google({
@@ -17,19 +19,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, account }) {
       if (account) {
-        // First login — save tokens
-        return {
-          ...token,
-          access_token: account.access_token as string,
-          expires_at: account.expires_at as number,
-          refresh_token: account.refresh_token as string,
-        };
-      } else if (Date.now() < (token.expires_at as number) * 1000) {
+        // First login — capture tokens from Google OAuth response
+        token.accessToken = account.access_token;
+        token.refreshToken = account.refresh_token;
+        token.expiresAt = account.expires_at;
+        return token;
+      } else if (Date.now() < (token.expiresAt as number) * 1000) {
         // Token still valid
         return token;
       } else {
         // Token expired — refresh
-        if (!token.refresh_token)
+        if (!token.refreshToken)
           throw new TypeError("Missing refresh_token");
 
         try {
@@ -41,7 +41,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 client_id: process.env.AUTH_GOOGLE_ID!,
                 client_secret: process.env.AUTH_GOOGLE_SECRET!,
                 grant_type: "refresh_token",
-                refresh_token: token.refresh_token as string,
+                refresh_token: token.refreshToken as string,
               }),
             }
           );
@@ -50,24 +50,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           if (!response.ok) throw tokens;
 
-          return {
-            ...token,
-            access_token: tokens.access_token,
-            expires_at: Math.floor(
-              Date.now() / 1000 + tokens.expires_in
-            ),
-            refresh_token:
-              tokens.refresh_token ?? token.refresh_token,
-          };
+          token.accessToken = tokens.access_token;
+          token.expiresAt = Math.floor(
+            Date.now() / 1000 + tokens.expires_in
+          );
+          // Some providers only issue refresh tokens once
+          if (tokens.refresh_token) {
+            token.refreshToken = tokens.refresh_token;
+          }
+          return token;
         } catch (error) {
           console.error("Error refreshing access_token", error);
-          return { ...token, error: "RefreshTokenError" as const };
+          token.error = "RefreshTokenError";
+          return token;
         }
       }
     },
     async session({ session, token }) {
-      // Expose access_token to server-side API routes via session
-      session.accessToken = token.access_token as string;
+      session.accessToken = token.accessToken as string;
       session.error = token.error as
         | "RefreshTokenError"
         | undefined;
@@ -85,9 +85,9 @@ declare module "next-auth" {
 
 declare module "@auth/core/jwt" {
   interface JWT {
-    access_token?: string;
-    expires_at?: number;
-    refresh_token?: string;
+    accessToken?: string;
+    expiresAt?: number;
+    refreshToken?: string;
     error?: "RefreshTokenError";
   }
 }
