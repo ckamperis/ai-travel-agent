@@ -581,8 +581,9 @@ export default function InboxPage() {
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{email.from.replace(/<[^>]+>/, '').trim()}</span>
                           <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider" style={{ background: '#4285F420', color: '#4285F4' }}>Gmail</span>
+                          <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider" style={{ background: 'var(--color-green-light)', color: 'var(--color-green)' }}>Travel Inquiry</span>
                         </div>
-                        <p className="text-sm font-medium mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>{email.subject}</p>
+                        <p className="text-sm font-medium mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>{email.subject || '(no subject)'}</p>
                         <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-text-muted)' }}>{email.snippet}</p>
                       </div>
                       <ArrowRight size={16} style={{ color: 'var(--color-text-muted)' }} />

@@ -143,6 +143,39 @@ export default function SettingsPage() {
               <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
                 Gmail read-only access. Your emails are processed locally — only selected emails are sent to AI for analysis.
               </p>
+
+              {/* Filter settings */}
+              <div className="mt-4 pt-4 space-y-4" style={{ borderTop: '1px solid var(--color-border)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>Classification Filters</p>
+
+                {/* Min email length */}
+                <div>
+                  <label className="mb-1.5 flex items-center justify-between text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                    <span>Min. email body length</span>
+                    <span className="tabular-nums">{settings.gmailMinEmailLength} chars</span>
+                  </label>
+                  <input type="range" min={0} max={200} step={10}
+                    value={settings.gmailMinEmailLength}
+                    onChange={e => update('gmailMinEmailLength', parseInt(e.target.value))}
+                    className="w-full" />
+                  <div className="mt-1 flex justify-between text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+                    <span>0 (any)</span><span>200</span>
+                  </div>
+                </div>
+
+                {/* Skip promotional */}
+                <div className="flex items-center gap-3">
+                  <button type="button"
+                    onClick={() => update('gmailSkipPromotional', !settings.gmailSkipPromotional)}
+                    className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer items-center rounded-full transition-colors"
+                    style={{ background: settings.gmailSkipPromotional ? 'var(--color-primary)' : 'var(--color-border)' }}>
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${settings.gmailSkipPromotional ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                  <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                    Skip promotional &amp; automated emails
+                  </span>
+                </div>
+              </div>
             </div>
           )}
         </section>

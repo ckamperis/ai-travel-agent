@@ -22,6 +22,9 @@ export interface AppSettings {
   followUpDays: number;
   customerRecognition: boolean;
   responseLength: 'concise' | 'standard' | 'detailed';
+  // Gmail filter settings
+  gmailMinEmailLength: number;
+  gmailSkipPromotional: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -41,6 +44,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   followUpDays: 3,
   customerRecognition: true,
   responseLength: 'standard',
+  gmailMinEmailLength: 50,
+  gmailSkipPromotional: true,
 };
 
 export function loadSettings(): AppSettings {
