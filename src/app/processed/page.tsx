@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { CheckSquare, Inbox, CheckCircle, AlertCircle, Clock, X, Mail, MapPin, Timer } from 'lucide-react';
 import { loadHistory, type ProcessedEmail } from '@/lib/settings';
+import * as db from '@/lib/db';
 
 function fmtDate(iso: string): string {
   try {
@@ -23,7 +24,29 @@ export default function ProcessedPage() {
   const [selected, setSelected] = useState<ProcessedEmail | null>(null);
 
   useEffect(() => {
-    setHistory(loadHistory());
+    (async () => {
+      // Try Supabase first, fallback to localStorage
+      const sbTrips = await db.getProcessedTrips();
+      if (sbTrips && sbTrips.length > 0) {
+        setHistory(sbTrips.map(t => {
+          const v = t.trip_versions?.[t.trip_versions.length - 1];
+          return {
+            id: t.id,
+            from: t.customers?.name || t.customers?.email || 'Unknown',
+            subject: `Trip to ${(t.destinations || [])[0] || 'Unknown'}`,
+            destination: (t.destinations || [])[0] || '',
+            processedAt: t.created_at,
+            totalTime: 0,
+            status: t.status === 'cancelled' ? 'failed' as const : 'completed' as const,
+            composedResponse: v?.composed_email || '',
+            customerEmail: t.customers?.email,
+            customerName: t.customers?.name,
+          };
+        }));
+      } else {
+        setHistory(loadHistory());
+      }
+    })();
   }, []);
 
   return (

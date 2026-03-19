@@ -20,6 +20,7 @@ import {
   addFollowUp, getProcessedSampleIds, LANGUAGES,
 } from '@/lib/settings';
 import { stripMarkdown } from '@/lib/markdown-strip';
+import * as db from '@/lib/db';
 import { emailToHtml } from '@/lib/email-to-html';
 import { getWeather, type WeatherDay } from '@/lib/weather';
 import LegResults from '@/components/LegResults';
@@ -463,11 +464,12 @@ export default function InboxPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emailText, analysis, legStates, editedLegs, isMultiLeg, settings, knownCustomer, addToast]);
 
-  /* ---- Save history + customer ---- */
+  /* ---- Save history + customer (dual-write: localStorage + Supabase) ---- */
   function saveHistoryAndCustomer(text: string, total: number) {
     const customerEmail = currentSampleFrom || extractEmail(emailText);
     const customerName = analysis?.customerName || '';
     if (analysis) {
+      // localStorage (existing)
       addToHistory({
         id: Date.now().toString(), from: customerName || customerEmail || 'Unknown',
         subject: `Trip to ${analysis.destination}`, destination: analysis.destination,
@@ -480,6 +482,76 @@ export default function InboxPage() {
       if (customerEmail) {
         upsertCustomer({ email: customerEmail, name: customerName, destination: analysis.destination, hotel: legStates[0]?.hotels[legStates[0]?.selectedHotelIdx]?.name, budget: `€${analysis.budget.min}-${analysis.budget.max}`, language: analysis.language });
       }
+
+      // Supabase (dual-write — fire-and-forget, don't block UI)
+      (async () => {
+        try {
+          // 1. Upsert customer
+          const dbCustomer = customerEmail
+            ? await db.upsertCustomer({ email: customerEmail, name: customerName, language: analysis.language })
+            : null;
+          if (!dbCustomer) return;
+
+          // 2. Create conversation
+          const conv = await db.createConversation({
+            customer_id: dbCustomer.id,
+            subject: `Trip to ${analysis.destination}`,
+          });
+          if (!conv) return;
+
+          // 3. Create inbound message
+          await db.createMessage({
+            conversation_id: conv.id,
+            direction: 'inbound',
+            from_email: customerEmail || 'unknown',
+            subject: `Trip to ${analysis.destination}`,
+            body_text: emailText,
+            classification: 'new_trip',
+          });
+
+          // 4. Create trip
+          const destinations = analysis.legs && analysis.legs.length > 0
+            ? analysis.legs.map(l => l.destination)
+            : [analysis.destination];
+          const trip = await db.createTrip({
+            customer_id: dbCustomer.id,
+            conversation_id: conv.id,
+            destinations,
+            dates: { start: analysis.dates.start, end: analysis.dates.end, duration: analysis.dates.duration },
+            budget: { min: analysis.budget.min, max: analysis.budget.max, currency: analysis.budget.currency },
+            travelers: { adults: analysis.travelers.adults, children: analysis.travelers.children },
+            special_requests: analysis.specialRequests || [],
+            status: text.length > 50 ? 'quoted' : 'new',
+          });
+          if (!trip) return;
+
+          // 5. Create trip version
+          const selectedFlight = legStates[0]?.flights[legStates[0]?.selectedFlightIdx] || null;
+          const selectedHotel = legStates[0]?.hotels[legStates[0]?.selectedHotelIdx] || null;
+          await db.createTripVersion({
+            trip_id: trip.id,
+            version_number: 1,
+            selected_flights: selectedFlight ? [selectedFlight] : [],
+            selected_hotels: selectedHotel ? [selectedHotel] : [],
+            itinerary_text: legStates[0]?.research || '',
+            composed_email: text,
+            total_cost: (selectedFlight?.price || 0) * (analysis.travelers.adults + analysis.travelers.children) + (selectedHotel?.pricePerNight || 0) * analysis.dates.duration,
+          });
+
+          // 6. Outbound message (composed response)
+          await db.createMessage({
+            conversation_id: conv.id,
+            direction: 'outbound',
+            from_email: 'agent',
+            subject: `Re: Trip to ${analysis.destination}`,
+            body_text: text,
+          });
+
+          console.log('[Supabase] Dual-write complete: customer + conversation + trip + version');
+        } catch (err) {
+          console.error('[Supabase] Dual-write failed (localStorage still saved):', err);
+        }
+      })();
     }
   }
 
@@ -495,17 +567,37 @@ export default function InboxPage() {
     finally { setTranslating(false); }
   }, [composedEmail, addToast]);
 
-  /* ---- Schedule follow-up ---- */
+  /* ---- Schedule follow-up (dual-write) ---- */
   const scheduleFollowUp = useCallback(() => {
     if (!analysis) return;
     const days = settings?.followUpDays || 3;
     const scheduled = new Date(); scheduled.setDate(scheduled.getDate() + days);
+
+    // localStorage
     addFollowUp({
       customerEmail: currentSampleFrom || extractEmail(emailText), customerName: analysis.customerName || currentSampleFrom || extractEmail(emailText),
       destination: analysis.destination, originalResponse: composedEmail,
       scheduledDate: scheduled.toISOString(), status: 'pending',
       processedEmailId: Date.now().toString(),
     });
+
+    // Supabase (fire-and-forget)
+    (async () => {
+      try {
+        const email = currentSampleFrom || extractEmail(emailText);
+        if (!email) return;
+        const customer = await db.getCustomerByEmail(email);
+        if (!customer) return;
+        await db.createFollowUp({
+          customer_id: customer.id,
+          scheduled_date: scheduled.toISOString().split('T')[0],
+          reminder_text: `Follow up on trip to ${analysis.destination}`,
+        });
+      } catch (err) {
+        console.error('[Supabase] Follow-up dual-write failed:', err);
+      }
+    })();
+
     addToast(`Follow-up scheduled for ${days} days from now`, 'success');
     setShowFollowUpForm(false);
   }, [analysis, emailText, composedEmail, settings, currentSampleFrom, addToast]);

@@ -17,6 +17,7 @@ import {
   type FollowUp,
 } from '@/lib/settings';
 import { useToast } from '@/components/Toast';
+import * as db from '@/lib/db';
 
 /* ================================================================
    Helpers
@@ -61,8 +62,20 @@ export default function FollowUpsPage() {
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
-  const reload = useCallback(() => {
-    setFollowUps(loadFollowUps());
+  const reload = useCallback(async () => {
+    // Try Supabase first, fallback to localStorage
+    const sbFollowUps = await db.getFollowUps();
+    if (sbFollowUps && sbFollowUps.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setFollowUps(sbFollowUps.map((f: any) => ({
+        id: f.id, customerEmail: f.customers?.email || '', customerName: f.customers?.name || '',
+        destination: f.reminder_text?.replace('Follow up on trip to ', '') || '',
+        originalResponse: '', scheduledDate: f.scheduled_date, status: f.status,
+        processedEmailId: f.trip_id || '', createdAt: f.created_at,
+      })));
+    } else {
+      setFollowUps(loadFollowUps());
+    }
   }, []);
 
   useEffect(() => {
@@ -71,14 +84,16 @@ export default function FollowUpsPage() {
 
   /* -- Actions ------------------------------------------------ */
 
-  const markSent = (id: string) => {
+  const markSent = async (id: string) => {
     updateFollowUp(id, { status: 'sent' });
+    await db.updateFollowUpStatus(id, 'sent', new Date().toISOString());
     addToast('Follow-up marked as sent', 'success');
     reload();
   };
 
-  const cancel = (id: string) => {
+  const cancel = async (id: string) => {
     updateFollowUp(id, { status: 'cancelled' });
+    await db.updateFollowUpStatus(id, 'cancelled');
     addToast('Follow-up cancelled', 'info');
     reload();
   };

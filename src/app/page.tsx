@@ -11,6 +11,7 @@ import {
   loadHistory, loadFollowUps,
   type ProcessedEmail, type FollowUp,
 } from '@/lib/settings';
+import * as db from '@/lib/db';
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -50,8 +51,36 @@ export default function DashboardPage() {
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
 
   useEffect(() => {
-    setHistory(loadHistory());
-    setFollowUps(loadFollowUps());
+    (async () => {
+      // Try Supabase for history, fallback to localStorage
+      const sbTrips = await db.getProcessedTrips();
+      if (sbTrips && sbTrips.length > 0) {
+        setHistory(sbTrips.map(t => ({
+          id: t.id,
+          from: t.customers?.name || t.customers?.email || 'Unknown',
+          subject: `Trip to ${(t.destinations || [])[0] || 'Unknown'}`,
+          destination: (t.destinations || [])[0] || '',
+          processedAt: t.created_at,
+          totalTime: 0,
+          status: t.status === 'cancelled' ? 'failed' as const : 'completed' as const,
+        })));
+      } else {
+        setHistory(loadHistory());
+      }
+
+      // Try Supabase for follow-ups, fallback to localStorage
+      const sbFollowUps = await db.getFollowUps('pending');
+      if (sbFollowUps && sbFollowUps.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        setFollowUps(sbFollowUps.map((f: any) => ({
+          id: f.id, customerEmail: f.customers?.email || '', customerName: f.customers?.name || '',
+          destination: '', originalResponse: '', scheduledDate: f.scheduled_date,
+          status: f.status, processedEmailId: '', createdAt: f.created_at,
+        })));
+      } else {
+        setFollowUps(loadFollowUps());
+      }
+    })();
   }, []);
 
   const total = history.length;

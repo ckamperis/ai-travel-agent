@@ -18,6 +18,7 @@ import {
   LANGUAGES,
   type KnownCustomer,
 } from '@/lib/settings';
+import * as db from '@/lib/db';
 import { useToast } from '@/components/Toast';
 
 /* ================================================================
@@ -288,8 +289,19 @@ export default function CustomersPage() {
   const { addToast } = useToast();
   const [customers, setCustomers] = useState<KnownCustomer[]>([]);
 
-  const reload = useCallback(() => {
-    setCustomers(loadCustomers());
+  const reload = useCallback(async () => {
+    // Try Supabase first, fallback to localStorage
+    const sbCustomers = await db.getCustomers();
+    if (sbCustomers && sbCustomers.length > 0) {
+      // Map Supabase rows to KnownCustomer shape for UI compatibility
+      setCustomers(sbCustomers.map(c => ({
+        email: c.email, name: c.name, tags: c.tags || [],
+        notes: c.notes || '', trips: [], preferredLanguage: c.language || 'en',
+        preferredTone: c.preferred_tone || 'professional', lastContact: c.updated_at,
+      })));
+    } else {
+      setCustomers(loadCustomers());
+    }
   }, []);
 
   useEffect(() => {
