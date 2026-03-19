@@ -1,6 +1,8 @@
 import { auth } from "@/auth";
-import { fetchInboxEmails } from "@/lib/gmail";
+import { fetchInboxEmails, type GmailEmail } from "@/lib/gmail";
 import { classifyEmails } from "@/lib/gmail-classify";
+import { detectConversation, type ConversationDetectionResult } from "@/lib/conversation-detector";
+import { classifyIntent, type IntentClassification } from "@/lib/intent-classifier";
 
 /* ── Simple in-memory cache (5 min TTL) ──────────────────────── */
 
@@ -24,6 +26,21 @@ function getCached(key: string): unknown | null {
 
 function setCache(key: string, data: unknown) {
   cache.set(key, { data, timestamp: Date.now() });
+}
+
+/* ── Enriched email type returned to the client ──────────────── */
+
+export interface EnrichedGmailEmail extends GmailEmail {
+  conversation?: ConversationDetectionResult;
+  intent?: IntentClassification;
+}
+
+/**
+ * Extract sender email from a "From" header like "John Doe <john@example.com>"
+ */
+function extractSenderEmail(from: string): string {
+  const match = from.match(/<([^>]+)>/);
+  return (match ? match[1] : from).toLowerCase().trim();
 }
 
 /* ── GET /api/gmail ──────────────────────────────────────────── */
@@ -66,7 +83,10 @@ export async function GET(request: Request) {
     const travelEmails = await classifyEmails(allEmails);
     console.log(`[Gmail API] ${travelEmails.length} travel emails out of ${allEmails.length}`);
 
-    const result = { emails: travelEmails, total: allEmails.length };
+    // Enrich each travel email with conversation detection + intent classification
+    const enrichedEmails = await enrichEmails(travelEmails);
+
+    const result = { emails: enrichedEmails, total: allEmails.length };
     setCache(cacheKey, result);
 
     return Response.json(result);
@@ -86,4 +106,58 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Enrich travel emails with conversation detection and intent classification.
+ * Runs in parallel for all emails, but non-blocking — failures don't prevent return.
+ */
+async function enrichEmails(
+  emails: GmailEmail[]
+): Promise<EnrichedGmailEmail[]> {
+  const enriched: EnrichedGmailEmail[] = await Promise.all(
+    emails.map(async (email) => {
+      const result: EnrichedGmailEmail = { ...email };
+
+      try {
+        // Step 1: Detect conversation
+        const senderEmail = extractSenderEmail(email.from);
+        const conversation = await detectConversation(
+          email.threadId,
+          senderEmail,
+          email.subject
+        );
+        result.conversation = conversation;
+
+        // Step 2: If existing conversation, classify intent
+        if (!conversation.isNew && conversation.previousMessages) {
+          const intent = await classifyIntent(
+            email.body,
+            conversation.previousMessages.map((m) => ({
+              direction: m.direction,
+              body_text: m.body_text,
+            }))
+          );
+          result.intent = intent;
+          console.log(
+            `[Gmail API] Thread ${email.threadId}: intent=${intent.intent} (${intent.confidence})`
+          );
+        } else {
+          console.log(
+            `[Gmail API] Thread ${email.threadId}: new conversation`
+          );
+        }
+      } catch (err) {
+        console.error(
+          `[Gmail API] Enrichment failed for ${email.id}:`,
+          err
+        );
+        // Non-blocking: return email without enrichment
+      }
+
+      return result;
+    })
+  );
+
+  return enriched;
 }

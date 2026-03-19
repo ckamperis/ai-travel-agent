@@ -2,6 +2,7 @@ const GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me";
 
 export interface GmailEmail {
   id: string;
+  threadId: string;
   from: string;
   subject: string;
   body: string;
@@ -73,6 +74,7 @@ async function fetchSingleMessage(
 
     return {
       id: msg.id,
+      threadId: msg.threadId || msg.id,
       from,
       subject,
       body,
